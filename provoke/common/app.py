@@ -296,9 +296,10 @@ class WorkerApplication(object):
 
     """
 
+    _taskgroups = {}
+
     def __init__(self):
         super(WorkerApplication, self).__init__()
-        self.taskgroups = {}
 
         #: This attribute should be used by clients to call tasks by name. For
         #: example, to call a task registered as ``'do_stuff'``::
@@ -311,11 +312,13 @@ class WorkerApplication(object):
         #: synchronously by calling them like a normal function.
         self.tasks = _TaskSet(self)
 
-    def declare_taskgroup(self, name, exchange='', routing_key=None):
+    @classmethod
+    def declare_taskgroup(cls, name, exchange='', routing_key=None):
         """Associates a name with a set of routing information. Tasks that are
         a member of a given taskgroup will use its routing information. Tasks
         that are not a member of a taskgroup will raise a ``TypeError``
-        exception if they are called asynchronously.
+        exception if they are called asynchronously. Taskgroups are shared
+        between all instances of this class.
 
         :param name: The name of the taskgroup.
         :type name: str
@@ -328,7 +331,7 @@ class WorkerApplication(object):
         :type routing_key: str
 
         """
-        self.taskgroups[name] = {'exchange': exchange,
+        cls._taskgroups[name] = {'exchange': exchange,
                                  'routing_key': routing_key}
 
     def declare_task(self, taskgroup, name):
@@ -344,7 +347,7 @@ class WorkerApplication(object):
         :type name: str
 
         """
-        tg_info = self.taskgroups[taskgroup]
+        tg_info = self._taskgroups[taskgroup]
         self.tasks._declare(name, **tg_info)
 
     def register_task(self, func, name=None, taskgroup=None):
@@ -365,9 +368,9 @@ class WorkerApplication(object):
             name = func.__name__
         tg_info = {'exchange': None, 'routing_key': None}
         if taskgroup is not None:
-            tg_info = self.taskgroups[taskgroup]
+            tg_info = self._taskgroups[taskgroup]
         elif hasattr(func, '_taskgroup'):
-            tg_info = self.taskgroups[func._taskgroup]
+            tg_info = self._taskgroups[func._taskgroup]
         self.tasks._set(func, name, **tg_info)
 
     def register_module(self, mod, prefix='', taskgroup=None, what=None):

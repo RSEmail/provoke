@@ -21,6 +21,11 @@
 # SOFTWARE.
 #
 
+"""Implements a possible entrypoint for instantiating a worker service that
+reads necessary information from configuration.
+
+"""
+
 from __future__ import absolute_import
 
 import os
@@ -28,86 +33,131 @@ import sys
 import time
 import signal
 import resource
-from optparse import OptionParser, OptionGroup
+from optparse import OptionParser
 
-from provoke.common.app import WorkerApplication
-from provoke.common.config import load_configuration, read_configuration_dir
-from provoke.common.logging import setup_logging
-from provoke.worker.master import WorkerMaster
-from provoke.worker import system
+from ..common.app import WorkerApplication
+from ..common.config import load_configuration, read_configuration_dir
+from ..common.logging import setup_logging
+from .master import WorkerMaster
+from . import system
+
+__all__ = ['WorkerMain']
 
 
-class ReloadSignal(Exception):
+class _ReloadSignal(Exception):
     pass
 
 
-def handle_signals():
-    def exit_sig(signum, frame):
-        sys.exit(0)
+class WorkerMain(object):
+    """This class controls the setup and daemonization of a task worker
+    service.
 
-    def reload_sig(signum, frame):
-        raise ReloadSignal()
-    signal.signal(signal.SIGTERM, exit_sig)
-    signal.signal(signal.SIGHUP, reload_sig)
+    :param app: The application backend that knows how to enqueue and execute
+                tasks.
+    :type app: :class:`~provoke.common.app.WorkerApplication`
+    :param config_dir: The directory containing configuration files to load.
+    :type config_dir: str
+    :param syslog_facility: The syslog facility use for worker logs.
+    :type syslog_facility: str
+    :param debug: Enable debug-level logging.
+    :type debug: bool
 
+    """
 
-def start_master():
-    default_config_dir = os.getenv('PROVOKE_CONFIG_DIR', '/etc/provoke')
+    def __init__(self, app, config_dir='/etc/provoke',
+                 syslog_facility='local6', debug=False):
+        super(WorkerMain, self).__init__()
+        self.app = app
+        self.config_dir = config_dir
+        self.syslog_facility = syslog_facility
+        self.debug = debug
 
-    parser = OptionParser()
-    parser.add_option('--debug', action='store_true',
-                      help='Debug-level logging')
-    parser.add_option('--config-dir', default=default_config_dir,
-                      help='Configuration directory')
-    parser.add_option('--limit', type='int', help='Worker task limit')
-    parser.add_option('--daemon', action='store_true', default=False,
-                      help='Daemonize the master process.')
+        #: If set, this function will be called from the master process
+        #: immediately after forking a child (worker) process, passing in a
+        #: list of queues the worker will consume, and the PID of the worker
+        #: process.
+        self.start_callback = None
 
-    options, extra = parser.parse_args()
+        #: If set, this function will be called from the master process
+        #: immediately after a child (worker) process exits, passing in the
+        #: list of queues the worker will consume, the PID of the worker
+        #: process, and the process exit code.
+        self.exit_callback = None
 
-    configparser = read_configuration_dir(options.config_dir)
-    config = load_configuration(configparser, options)
+        #: If set, this function will be called from the worker process
+        #: immediately after the process started, passing in the list of queues
+        #: the worker will consume.
+        self.worker_callback = None
 
-    setup_logging(debug=options.debug, syslog_facility='local6')
+        #: If set, this function will be called from the worker process
+        #: immediately before each task is run, passing in the name of
+        #: the task, the positional and the keyword arguments.
+        self.task_callback = None
 
-    app = WorkerApplication()
+        #: If set, this function will be called from the worker process
+        #: immediately after each task returns, passing in the name of the
+        #: task, and the return value (or ``None``). If the task threw an
+        #: exception, this callback will be called from inside its handler.
+        self.task_return_callback = None
 
-    pidfile = None
-    user, group, umask = None, None, None
+    def _handle_signals(self):
+        def exit_sig(signum, frame):
+            sys.exit(0)
 
-    def worker_enter(app, queues):
-        system.drop_privileges(user, group, umask)
-        time.sleep(1.0)
+        def reload_sig(signum, frame):
+            raise _ReloadSignal()
+        signal.signal(signal.SIGTERM, exit_sig)
+        signal.signal(signal.SIGHUP, reload_sig)
 
-    master = WorkerMaster(worker_limit=options.limit)
-    for worker in config.get_workers():
-        exclusive = worker.get('exclusive', False)
-        master.add_worker(app, worker['queues'], worker['processes'],
-                          worker_enter, exclusive=exclusive)
+    def _start_master(self, daemonize):
+        configparser = read_configuration_dir(self.config_dir)
+        config = load_configuration(configparser, options)
 
-    for res, limits in config.get_rlimits():
-        resource.setrlimit(res, limits)
+        setup_logging(debug=self.debug, syslog_facility='local6')
 
-    if options.daemon:
-        pidfile = config.get_pidfile()
-        stdout, stderr, stdin = config.get_stdio_redirects()
-        user, group, umask = config.get_worker_privileges()
-        if stdout or stderr or stdin:
-            system.redirect_stdio(stdout, stderr, stdin)
-        system.daemonize()
-    with system.PidFile(pidfile):
-        handle_signals()
-        try:
-            master.run()
-        finally:
-            master.wait()
+        pidfile = None
+        user, group, umask = None, None, None
 
+        def _worker_callback(*args, **kwargs):
+            system.drop_privileges(user, group, umask)
+            time.sleep(1.0)
+            self.worker_callback(*arg, **kwargs)
 
-def main():
-    while True:
-        try:
-            start_master()
-        except ReloadSignal:
-            pass
-        except (SystemExit, KeyboardInterrupt):
-            break
+        master = WorkerMaster(start_callback=self.start_callback,
+                              exit_callback=self.exit_callback)
+        for worker_queues, worker_params in config.get_workers():
+            master.add_worker(self.app, worker_queues,
+                              start_callback=_worker_callback,
+                              task_callback=self.task_callback,
+                              return_callback=self.task_return_callback,
+                              **worker_params)
+
+        for res, limits in config.get_rlimits():
+            resource.setrlimit(res, limits)
+
+        if daemonize:
+            pidfile = config.get_pidfile()
+            stdout, stderr, stdin = config.get_stdio_redirects()
+            user, group, umask = config.get_worker_privileges()
+            if stdout or stderr or stdin:
+                system.redirect_stdio(stdout, stderr, stdin)
+            system.daemonize()
+        with system.PidFile(pidfile):
+            self._handle_signals()
+            try:
+                master.run()
+            finally:
+                master.wait()
+
+    def run(self, daemonize=False):
+        """The main event loop. This method will only return gracefully if
+        ``SystemExit`` or ``KeyboardInterrupt`` are raised.
+
+        """
+        while True:
+            try:
+                self._start_master(daemonize)
+            except _ReloadSignal:
+                pass
+            except (SystemExit, KeyboardInterrupt):
+                break

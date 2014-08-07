@@ -136,8 +136,8 @@ class _WorkerProcess(object):
             msg.delivery_info.get('redelivered')
         if self.task_callback:
             try:
-                self.task_callback(self.app, body['task_name'],
-                                   body['args'], body['kwargs'])
+                self.task_callback(body['task_name'], body['args'],
+                                   body['kwargs'])
             except DiscardTask:
                 skip = True
         if not skip:
@@ -146,11 +146,11 @@ class _WorkerProcess(object):
                                  msg.correlation_id)
             except Exception:
                 if self.return_callback:
-                    self.return_callback(self.app, body['task_name'], None)
+                    self.return_callback(body['task_name'], None)
                 raise
             else:
                 if self.return_callback:
-                    self.return_callback(self.app, body['task_name'], ret)
+                    self.return_callback(body['task_name'], ret)
 
     def _on_message(self, channel, msg):
         try:
@@ -206,7 +206,7 @@ class _WorkerProcess(object):
     def _run(self):
         try:
             if self.start_callback:
-                self.start_callback(self.app, self.queues)
+                self.start_callback(self.queues)
             self._try_consuming()
         except (SystemExit, KeyboardInterrupt):
             pass
@@ -232,10 +232,6 @@ class WorkerMaster(object):
                           passed in the same arguments as ``start_callback``
                           plus the exit status integer.
     :type exit_callback: collections.Callable
-    :param worker_limit: The number of tasks a worker process may execute
-                         before it exits and is replaced by a new worker
-                         process.
-    :type worker_limit: int
     :param worker_data: Arbitrary data may be made available to workers with
                         this dictionary. Tasks running in worker processes may
                         use
@@ -246,12 +242,11 @@ class WorkerMaster(object):
     """
 
     def __init__(self, start_callback=None, exit_callback=None,
-                 worker_limit=10, worker_data=None):
+                 worker_data=None):
         super(WorkerMaster, self).__init__()
         self._start_callback = start_callback
         self._exit_callback = exit_callback
         self._worker_data = worker_data or {}
-        self.worker_limit = worker_limit
         self.workers = []
 
     def start_callback(self, worker):
@@ -259,7 +254,7 @@ class WorkerMaster(object):
                  pid=worker.pid, queues=worker.queues)
         if self._start_callback:
             try:
-                self._start_callback(worker.app, worker.queues, worker.pid)
+                self._start_callback(worker.queues, worker.pid)
             except Exception:
                 pass
 
@@ -269,13 +264,13 @@ class WorkerMaster(object):
                  queues=worker.queues)
         if self._exit_callback:
             try:
-                self._exit_callback(worker.app, worker.queues, worker.pid,
-                                    status)
+                self._exit_callback(worker.queues, worker.pid, status)
             except Exception:
                 pass
 
-    def add_worker(self, app, queues, num_processes=1, start_callback=None,
-                   task_callback=None, return_callback=None, exclusive=False):
+    def add_worker(self, app, queues, num_processes=1, task_limit=10,
+                   start_callback=None, task_callback=None,
+                   return_callback=None, exclusive=False):
         """Adds a new worker process to be managed by the :meth:`.run` method.
 
         :param app: The application to execute tasks with.
@@ -286,6 +281,10 @@ class WorkerMaster(object):
         :param num_processes: The number of processes to maintain for this
                               worker.
         :type num_processes: int
+        :param task_limit: The number of tasks a worker process may execute
+                           before it exits and is replaced by a new worker
+                           process.
+        :type task_limit: int
         :param start_callback: This function is called inside the child process
                                every time a new worker process is started. This
                                callback is given two parameters, the
@@ -316,7 +315,7 @@ class WorkerMaster(object):
 
         """
         for i in range(num_processes):
-            worker = _WorkerProcess(app, queues, self.worker_limit,
+            worker = _WorkerProcess(app, queues, task_limit,
                                     start_callback, task_callback,
                                     return_callback, exclusive)
             self.workers += [worker]

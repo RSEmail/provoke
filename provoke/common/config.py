@@ -42,10 +42,9 @@ _COMMA_DELIMITER = re.compile(r',\s*')
 
 class Configuration(object):
 
-    def __init__(self, config, options):
+    def __init__(self, config):
         super(Configuration, self).__init__()
         self._config = config
-        self._options = options
 
     def _from_config(self, in_dict, section, name, dict_key=None,
                      opt_type='str'):
@@ -67,16 +66,6 @@ class Configuration(object):
         except (NoOptionError, NoSectionError):
             pass
 
-    def _from_options(self, in_dict, key, dict_key=None):
-        if dict_key is None:
-            dict_key = key
-        try:
-            value = getattr(self._options, key)
-            if value is not None:
-                in_dict[dict_key] = value
-        except AttributeError:
-            pass
-
     def _configure_amqp(self):
         section = 'amqp'
         if self._config.has_section(section):
@@ -91,24 +80,20 @@ class Configuration(object):
                               opt_type='float')
             AmqpConnection.set_connection_params(**params)
 
-    def get_taskgroup(self, name):
-        section = 'taskgroup:{0}'.format(name)
-        params = {}
-        if self._config.has_section(section):
-            self._from_config(params, section, 'queue')
-            self._from_config(params, section, 'routing_key')
-            self._from_config(params, section, 'exchange')
-        if self._options:
-            self._from_options(params, '{0}_queue'.format(name), 'queue')
-            self._from_options(params, '{0}_routing_key'.format(name),
-                               'routing_key')
-            self._from_options(params, '{0}_exchange'.format(name), 'exchange')
-        if 'queue' in params:
-            params['exchange'] = ''
-            params['routing_key'] = params.pop('queue')
-        params.setdefault('exchange', '')
-        params.setdefault('routing_key', None)
-        return params
+    def _configure_taskgroups(self):
+        section_prefix = 'taskgroup:'
+        for section in self._config.sections():
+            if section.startswith(section_prefix):
+                tg_name = section[len(section_prefix):]
+                params = {'exchange': '',
+                          'routing_key': None}
+                self._from_config(params, section, 'queue')
+                self._from_config(params, section, 'routing_key')
+                self._from_config(params, section, 'exchange')
+                if 'queue' in params:
+                    params['exchange'] = ''
+                    params['routing_key'] = params.pop('queue')
+                WorkerApplication.declare_taskgroup(tg_name, **params)
 
     def get_workers(self):
         workers = []
@@ -117,16 +102,14 @@ class Configuration(object):
             if section.startswith(section_prefix):
                 params = {}
                 self._from_config(params, section, 'queues', opt_type='list')
-                self._from_config(params, section, 'processes', opt_type='int')
-                self._from_config(params, section, 'exclusive', opt_type='bool')
-                workers.append(params)
-        if self._options:
-            from_opts = {}
-            self._from_options(from_opts, 'worker_queues', 'queues')
-            self._from_options(from_opts, 'worker_processes', 'processes')
-            self._from_options(from_opts, 'worker_exclusive', 'exclusive')
-            if from_opts.get('queues'):
-                workers.append(from_opts)
+                self._from_config(params, section, 'processes', opt_type='int',
+                                  dict_key='num_processes')
+                self._from_config(params, section, 'task_limit',
+                                  opt_type='int')
+                self._from_config(params, section, 'exclusive', 
+                                  opt_type='bool')
+                queues = params.pop('queues', [])
+                workers.append((queues, params))
         return workers
 
     def get_rlimits(self):
@@ -161,9 +144,10 @@ class Configuration(object):
         return info.get('user'), info.get('group'), info.get('umask')
 
 
-def load_configuration(configparser, options=None):
-    config = Configuration(configparser, options)
+def load_configuration(configparser):
+    config = Configuration(configparser)
     config._configure_amqp()
+    config._configure_taskgroups()
     return config
 
 

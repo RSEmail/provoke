@@ -33,21 +33,6 @@ __all__ = ['RoutesBase']
 
 class RoutesBase(MethodView):
 
-    _worker_app = None
-    tasks = []
-
-    @classmethod
-    def _build_worker_app(cls):
-        cls._worker_app = app = WorkerApplication()
-        taskgroups = flask.current_app.config['PROVOKE_TASKGROUPS']
-        for taskgroup, info in taskgroups.items():
-            app.declare_taskgroup(taskgroup, **info)
-        for taskgroup, task_name in cls.tasks:
-            app.declare_task(taskgroup, task_name)
-        return app
-
     @property
     def worker_app(self):
-        if self._worker_app:
-            return self._worker_app
-        return self._build_worker_app()
+        return flask.current_app.config.get('PROVOKE_APP')
