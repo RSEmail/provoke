@@ -1,0 +1,175 @@
+# The MIT License (MIT)
+#
+# Copyright (c) 2014 Ian Good
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+#
+
+from __future__ import absolute_import
+
+import re
+import os
+import os.path
+import resource
+from ast import literal_eval
+from collections import defaultdict
+from ConfigParser import SafeConfigParser, NoOptionError, NoSectionError
+
+from .amqp import AmqpConnection
+from .app import WorkerApplication
+
+__all__ = ['load_configuration', 'read_configuration_dir']
+
+
+_COMMA_DELIMITER = re.compile(r',\s*')
+
+
+class Configuration(object):
+
+    def __init__(self, config, options):
+        super(Configuration, self).__init__()
+        self._config = config
+        self._options = options
+
+    def _from_config(self, in_dict, section, name, dict_key=None,
+                     opt_type='str'):
+        config = self._config
+        if dict_key is None:
+            dict_key = name
+        try:
+            if opt_type == 'int':
+                in_dict[dict_key] = config.getint(section, name)
+            elif opt_type == 'float':
+                in_dict[dict_key] = config.getfloat(section, name)
+            elif opt_type == 'bool':
+                in_dict[dict_key] = config.getboolean(section, name)
+            elif opt_type == 'list':
+                values = config.get(section, name)
+                in_dict[dict_key] = re.split(_COMMA_DELIMITER, values)
+            else:
+                in_dict[dict_key] = config.get(section, name)
+        except (NoOptionError, NoSectionError):
+            pass
+
+    def _from_options(self, in_dict, key, dict_key=None):
+        if dict_key is None:
+            dict_key = key
+        try:
+            value = getattr(self._options, key)
+            if value is not None:
+                in_dict[dict_key] = value
+        except AttributeError:
+            pass
+
+    def _configure_amqp(self):
+        section = 'amqp'
+        if self._config.has_section(section):
+            params = {}
+            self._from_config(params, section, 'host')
+            self._from_config(params, section, 'port', opt_type='int')
+            self._from_config(params, section, 'user', dict_key='userid')
+            self._from_config(params, section, 'password')
+            self._from_config(params, section, 'virtual_host')
+            self._from_config(params, section, 'heartbeat', opt_type='float')
+            self._from_config(params, section, 'connect_timeout',
+                              opt_type='float')
+            AmqpConnection.set_connection_params(**params)
+
+    def get_taskgroup(self, name):
+        section = 'taskgroup:{0}'.format(name)
+        params = {}
+        if self._config.has_section(section):
+            self._from_config(params, section, 'queue')
+            self._from_config(params, section, 'routing_key')
+            self._from_config(params, section, 'exchange')
+        if self._options:
+            self._from_options(params, '{0}_queue'.format(name), 'queue')
+            self._from_options(params, '{0}_routing_key'.format(name),
+                               'routing_key')
+            self._from_options(params, '{0}_exchange'.format(name), 'exchange')
+        if 'queue' in params:
+            params['exchange'] = ''
+            params['routing_key'] = params.pop('queue')
+        params.setdefault('exchange', '')
+        params.setdefault('routing_key', None)
+        return params
+
+    def get_workers(self):
+        workers = []
+        section_prefix = 'worker:'
+        for section in self._config.sections():
+            if section.startswith(section_prefix):
+                params = {}
+                self._from_config(params, section, 'queues', opt_type='list')
+                self._from_config(params, section, 'processes', opt_type='int')
+                self._from_config(params, section, 'exclusive', opt_type='bool')
+                workers.append(params)
+        if self._options:
+            from_opts = {}
+            self._from_options(from_opts, 'worker_queues', 'queues')
+            self._from_options(from_opts, 'worker_processes', 'processes')
+            self._from_options(from_opts, 'worker_exclusive', 'exclusive')
+            if from_opts.get('queues'):
+                workers.append(from_opts)
+        return workers
+
+    def get_rlimits(self):
+        try:
+            max_fd = self._config.getint('daemon', 'max-fd')
+            yield resource.RLIMIT_NOFILE, (max_fd, max_fd)
+        except (NoOptionError, NoSectionError):
+            pass
+
+    def get_pidfile(self):
+        try:
+            return self._config.get('daemon', 'pidfile')
+        except (NoOptionError, NoSectionError):
+            pass
+
+    def get_stdio_redirects(self):
+        section = 'daemon'
+        info = {}
+        self._from_config(info, section, 'stdout')
+        self._from_config(info, section, 'stderr')
+        self._from_config(info, section, 'stdin')
+        return info.get('stdout'), info.get('stderr'), info.get('stdin')
+
+    def get_worker_privileges(self):
+        section = 'daemon'
+        info = {}
+        self._from_config(info, section, 'user')
+        self._from_config(info, section, 'group')
+        self._from_config(info, section, 'umask')
+        if 'umask' in info:
+            info['umask'] = literal_eval(info['umask'])
+        return info.get('user'), info.get('group'), info.get('umask')
+
+
+def load_configuration(configparser, options=None):
+    config = Configuration(configparser, options)
+    config._configure_amqp()
+    return config
+
+
+def read_configuration_dir(directory, configparser=None, suffix='.conf'):
+    configparser = configparser or SafeConfigParser()
+    files = [os.path.join(directory, filename) for filename
+             in os.listdir(directory) if filename.endswith(suffix)]
+    configparser.read(files)
+    return configparser
