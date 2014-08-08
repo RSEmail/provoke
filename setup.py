@@ -7,7 +7,7 @@ setup(name='provoke',
       author='Ian Good',
       author_email='ian.good@rackspace.com',
       packages=find_packages(),
-      install_requires=['amqp',
-                        'flask',
-                        'jsonschema',
-                        'passlib'])
+      install_requires=['amqp'],
+      extras_require={
+          'api': ['flask', 'jsonschema', 'passlib'],
+      })

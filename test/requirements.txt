@@ -3,3 +3,8 @@ mock
 coverage
 nosexcover
 pep8
+
+flask
+jsonschema
+passlib
+MySQL-python
