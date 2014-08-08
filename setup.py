@@ -10,4 +10,5 @@ setup(name='provoke',
       install_requires=['amqp'],
       extras_require={
           'api': ['flask', 'jsonschema', 'passlib'],
+          'mysql': ['MySQL-python'],
       })
