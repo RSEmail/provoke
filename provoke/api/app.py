@@ -35,35 +35,30 @@ from flask import Flask
 __all__ = ['get_flask_app']
 
 
-def get_flask_app(app, config_dir='/etc/provoke', syslog_facility='local5',
-                  debug=False):
+def get_flask_app(worker_app=None, config_dir='/etc/provoke',
+                  logger_name='provoke.api', debug=False):
     """Builds and returns a ``Flask`` object which serves as the WSGI
     application for the API.
 
-    :param app: The application backend that knows how to enqueue and execute
-                tasks.
-    :type app: :class:`~provoke.common.app.WorkerApplication`
+    :param worker_app: The application backend that knows how to enqueue and
+                       execute tasks.
+    :type worker_app: :class:`~provoke.common.app.WorkerApplication`
     :param config_dir: Serves as the root directory where config files are
                        found.
     :type config_dir: str
-    :param syslog_facility: The syslog facility where API logs are sent.
-    :type syslog_facility: str
+    :param logger_name: The logger name that Flask should use for its logging
+                        messages.
+    :type logger_name: str
     :param debug: Whether flask should run in debug mode and use debug-level
                   logging.
     :type debug: bool
 
     """
     app = Flask(__name__,
-                debug=debug,
                 instance_path=config_dir,
                 instance_relative_config=True)
-    app.logger_name = 'provoke.api'
+    app.debug = debug
+    app.logger_name = logger_name
     app.config.from_envvar('PROVOKE_FLASK_SETTINGS', silent=True)
-    app.config['PROVOKE_APP'] = app
-
-    configparser = read_configuration_dir(config_dir)
-    config = load_configuration(configparser)
-
-    initialize_auth(config_dir)
-
-    setup_logging(debug=app.debug, syslog_facility=syslog_facility)
+    app.config['PROVOKE_APP'] = worker_app
+    return app

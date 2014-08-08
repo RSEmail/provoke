@@ -31,8 +31,6 @@ import traceback
 import collections
 from functools import wraps
 
-from pkg_resources import resource_string
-
 from jsonschema import Draft4Validator, ValidationError, FormatChecker
 from flask import request, json, current_app
 from werkzeug.urls import url_unquote
