@@ -63,6 +63,28 @@ class Configuration(object):
         except (NoOptionError, NoSectionError):
             pass
 
+    def _configure_mysql(self):
+        try:
+            from .mysql import MySQLConnection
+        except ImportError:
+            return
+        section_prefix = 'mysql:'
+        for section in self._config.sections():
+            if section.startswith(section_prefix):
+                db_name = section[len(section_prefix):]
+                params = {}
+                self._from_config(params, section, 'user')
+                self._from_config(params, section, 'password',
+                                  dict_key='passwd')
+                self._from_config(params, section, 'host')
+                self._from_config(params, section, 'port', opt_type='int')
+                self._from_config(params, section, 'database', dict_key='db')
+                self._from_config(params, section, 'charset')
+                self._from_config(params, section, 'unix_socket')
+                self._from_config(params, section, 'connect_timeout',
+                                  opt_type='int')
+                MySQLConnection.set_connection_params(db_name, **params)
+
     def _configure_amqp(self):
         try:
             from .amqp import AmqpConnection
@@ -152,6 +174,7 @@ class Configuration(object):
 def load_configuration(configparser):
     config = Configuration(configparser)
     config._configure_amqp()
+    config._configure_mysql()
     config._configure_taskgroups()
     return config
 

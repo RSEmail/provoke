@@ -9,6 +9,7 @@ from mock import patch, MagicMock
 from provoke.common.config import Configuration, read_configuration_dir
 from provoke.common.app import WorkerApplication
 from provoke.common.amqp import AmqpConnection
+from provoke.common.mysql import MySQLConnection
 
 
 class TestConfiguration(unittest.TestCase):
@@ -67,24 +68,46 @@ class TestConfiguration(unittest.TestCase):
         cfgparser.get.assert_called_with('sec', 'one')
         self.assertEqual(['one', 'two', 'three'], ret['one'])
 
+    @patch.object(MySQLConnection, 'set_connection_params')
+    def test_configure_databases(self, set_mock):
+        cfgparser = MagicMock()
+        cfg = Configuration(cfgparser)
+        cfgparser.sections.return_value = ['one', 'mysql:test']
+        cfgparser.get.side_effect = ['testuser',
+            'testpass',
+            'testhost',
+            'testdb',
+            'testcharset',
+            NoOptionError('mysql:test', 'unix_socket')]
+        cfgparser.getint.side_effect = [3306, 10]
+        cfg._configure_mysql()
+        set_mock.assert_called_with('test',
+            user='testuser',
+            passwd='testpass',
+            host='testhost',
+            port=3306,
+            db='testdb',
+            charset='testcharset',
+            connect_timeout=10)
+
     @patch.object(AmqpConnection, 'set_connection_params')
     def test_configure_amqp(self, set_mock):
         cfgparser = MagicMock()
         cfg = Configuration(cfgparser)
         cfgparser.sections.return_value = ['one', 'amqp']
         cfgparser.get.side_effect = ['testhost',
-                                     'testuser',
-                                     'testpass',
-                                     NoOptionError('amqp', 'virtual_host')]
+            'testuser',
+            'testpass',
+            NoOptionError('amqp', 'virtual_host')]
         cfgparser.getint.return_value = 5672
         cfgparser.getfloat.side_effect = [30.0, 10.0]
         cfg._configure_amqp()
         set_mock.assert_called_with(userid='testuser',
-                                    password='testpass',
-                                    host='testhost',
-                                    port=5672,
-                                    heartbeat=30.0,
-                                    connect_timeout=10.0)
+            password='testpass',
+            host='testhost',
+            port=5672,
+            heartbeat=30.0,
+            connect_timeout=10.0)
 
     @patch.object(WorkerApplication, 'declare_taskgroup')
     def test_configure_taskgroups(self, declare_mock):
