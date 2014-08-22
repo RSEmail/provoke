@@ -31,9 +31,6 @@ from ast import literal_eval
 from collections import defaultdict
 from ConfigParser import SafeConfigParser, NoOptionError, NoSectionError
 
-from .amqp import AmqpConnection
-from .app import WorkerApplication
-
 __all__ = ['load_configuration', 'read_configuration_dir']
 
 
@@ -67,6 +64,10 @@ class Configuration(object):
             pass
 
     def _configure_amqp(self):
+        try:
+            from .amqp import AmqpConnection
+        except ImportError:
+            return
         section = 'amqp'
         if self._config.has_section(section):
             params = {}
@@ -81,6 +82,10 @@ class Configuration(object):
             AmqpConnection.set_connection_params(**params)
 
     def _configure_taskgroups(self):
+        try:
+            from .app import WorkerApplication
+        except ImportError:
+            return
         section_prefix = 'taskgroup:'
         for section in self._config.sections():
             if section.startswith(section_prefix):
