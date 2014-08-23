@@ -86,7 +86,6 @@ class JsonResponse(BaseResponse):
     before transmission. The response will also include ``Content-Type:
     application/json`` in that case.
 
-
     :param response: If this argument is a :class:`~collections.Mapping` type,
                      then it is JSON encoded before the response is sent.
                      Otherwise, it is passed directly through to the response.
