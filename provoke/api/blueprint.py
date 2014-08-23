@@ -55,7 +55,7 @@ class Blueprint(FlaskBlueprint):
         self.errorhandler(Exception)(json_error_handler)
         for code in default_exceptions.keys():
             if code != 500:
-                blueprint.errorhandler(code)(json_error_handler)
+                self.errorhandler(code)(json_error_handler)
 
     def register_route(self, route, view_class, view_name=None):
         """Blueprint route registration convenience function. It registers
