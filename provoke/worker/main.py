@@ -36,7 +36,7 @@ import resource
 from optparse import OptionParser
 
 from ..common.app import WorkerApplication
-from ..common.config import load_configuration, read_configuration_dir
+from ..common.config import load_configuration, read_configuration_files
 from ..common.logging import setup_logging
 from .master import WorkerMaster
 from . import system
@@ -55,8 +55,8 @@ class WorkerMain(object):
     :param app: The application backend that knows how to enqueue and execute
                 tasks.
     :type app: :class:`~provoke.common.app.WorkerApplication`
-    :param config_dir: The directory containing configuration files to load.
-    :type config_dir: str
+    :param config_files: List of configuration files to load.
+    :type config_files: list
     :param syslog_facility: The syslog facility use for worker logs.
     :type syslog_facility: str
     :param debug: Enable debug-level logging.
@@ -64,11 +64,11 @@ class WorkerMain(object):
 
     """
 
-    def __init__(self, app, config_dir='/etc/provoke',
+    def __init__(self, app, config_files=None,
                  syslog_facility='local6', debug=False):
         super(WorkerMain, self).__init__()
         self.app = app
-        self.config_dir = config_dir
+        self.config_files = config_files
         self.syslog_facility = syslog_facility
         self.debug = debug
 
@@ -110,7 +110,7 @@ class WorkerMain(object):
         signal.signal(signal.SIGHUP, reload_sig)
 
     def _start_master(self, daemonize):
-        configparser = read_configuration_dir(self.config_dir)
+        configparser = read_configuration_files(self.config_files)
         config = load_configuration(configparser, options)
 
         setup_logging(debug=self.debug, syslog_facility='local6')

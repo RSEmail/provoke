@@ -6,7 +6,7 @@ from ConfigParser import NoOptionError
 
 from mock import patch, MagicMock
 
-from provoke.common.config import Configuration, read_configuration_dir
+from provoke.common.config import Configuration, read_configuration_files
 from provoke.common.app import WorkerApplication
 from provoke.common.amqp import AmqpConnection
 from provoke.common.mysql import MySQLConnection
@@ -180,13 +180,11 @@ class TestConfiguration(unittest.TestCase):
         cfgparser.get.assert_any_call('daemon', 'group')
         cfgparser.get.assert_any_call('daemon', 'umask')
 
-    @patch.object(os, 'listdir')
-    def test_read_configuration_dir(self, listdir_mock):
-        listdir_mock.return_value = ['one', 'two.conf', 'three.conf']
+    def test_read_configuration_files(self):
+        files = ['one', 'two.conf', 'three.conf']
         configparser = MagicMock()
-        ret = read_configuration_dir('testdir', configparser=configparser)
-        configparser.read.assert_called_with(['testdir/two.conf',
-                                              'testdir/three.conf'])
+        ret = read_configuration_files(files, configparser=configparser)
+        configparser.read.assert_called_with(files)
         self.assertEqual(configparser, ret)
 
 

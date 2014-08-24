@@ -35,17 +35,13 @@ from flask import Flask
 __all__ = ['get_flask_app']
 
 
-def get_flask_app(worker_app=None, config_dir='/etc/provoke',
-                  logger_name='provoke.api', debug=False):
+def get_flask_app(worker_app=None, logger_name='provoke.api', debug=False):
     """Builds and returns a ``Flask`` object which serves as the WSGI
     application for the API.
 
     :param worker_app: The application backend that knows how to enqueue and
                        execute tasks.
     :type worker_app: :class:`~provoke.common.app.WorkerApplication`
-    :param config_dir: Serves as the root directory where config files are
-                       found.
-    :type config_dir: str
     :param logger_name: The logger name that Flask should use for its logging
                         messages.
     :type logger_name: str
@@ -55,10 +51,8 @@ def get_flask_app(worker_app=None, config_dir='/etc/provoke',
 
     """
     app = Flask(__name__,
-                instance_path=config_dir,
                 instance_relative_config=True)
     app.debug = debug
     app.logger_name = logger_name
-    app.config.from_envvar('PROVOKE_FLASK_SETTINGS', silent=True)
     app.config['PROVOKE_APP'] = worker_app
     return app

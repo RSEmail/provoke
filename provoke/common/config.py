@@ -31,7 +31,7 @@ from ast import literal_eval
 from collections import defaultdict
 from ConfigParser import SafeConfigParser, NoOptionError, NoSectionError
 
-__all__ = ['load_configuration', 'read_configuration_dir']
+__all__ = ['load_configuration', 'read_configuration_files']
 
 
 _COMMA_DELIMITER = re.compile(r',\s*')
@@ -179,9 +179,7 @@ def load_configuration(configparser):
     return config
 
 
-def read_configuration_dir(directory, configparser=None, suffix='.conf'):
+def read_configuration_files(paths, configparser=None):
     configparser = configparser or SafeConfigParser()
-    files = [os.path.join(directory, filename) for filename
-             in os.listdir(directory) if filename.endswith(suffix)]
-    configparser.read(files)
+    configparser.read(paths)
     return configparser
