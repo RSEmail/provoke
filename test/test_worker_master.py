@@ -178,43 +178,43 @@ class TestWorkerMaster(unittest.TestCase):
 
     def test_start_callback(self):
         cb = MagicMock(side_effect=Exception)
-        worker = MagicMock(app='testapp', queues='testqueues', pid='testpid')
-        master = WorkerMaster(start_callback=cb)
+        worker = MagicMock(queues='testqueues', pid='testpid')
+        master = WorkerMaster('testapp', start_callback=cb)
         master.start_callback(worker)
         cb.assert_called_with('testqueues', 'testpid')
 
     def test_exit_callback(self):
         cb = MagicMock(side_effect=Exception)
-        worker = MagicMock(app='testapp', queues='testqueues', pid='testpid')
-        master = WorkerMaster(exit_callback=cb)
+        worker = MagicMock(queues='testqueues', pid='testpid')
+        master = WorkerMaster('testapp', exit_callback=cb)
         master.exit_callback(worker, 'teststatus')
         cb.assert_called_with('testqueues', 'testpid', 'teststatus')
 
     def test_add_worker(self):
-        master = WorkerMaster()
+        master = WorkerMaster('testapp')
         self.assertEqual([], master.workers)
-        master.add_worker('testapp1', ['queue1'], exclusive=True)
+        master.add_worker(['queue1'], exclusive=True)
         self.assertEqual(1, len(master.workers))
-        self.assertEqual('testapp1', master.workers[0].app)
+        self.assertEqual('testapp', master.workers[0].app)
         self.assertEqual(['queue1'], master.workers[0].queues)
         self.assertEqual(None, master.workers[0].pid)
-        master.add_worker('testapp2', ['queue2'], num_processes=2)
+        master.add_worker(['queue2'], num_processes=2)
         self.assertEqual(3, len(master.workers))
-        self.assertEqual('testapp1', master.workers[0].app)
+        self.assertEqual('testapp', master.workers[0].app)
         self.assertEqual(['queue1'], master.workers[0].queues)
         self.assertTrue(master.workers[0].exclusive)
-        self.assertEqual('testapp2', master.workers[1].app)
+        self.assertEqual('testapp', master.workers[1].app)
         self.assertEqual(['queue2'], master.workers[1].queues)
         self.assertFalse(master.workers[1].exclusive)
-        self.assertEqual('testapp2', master.workers[2].app)
+        self.assertEqual('testapp', master.workers[2].app)
         self.assertEqual(['queue2'], master.workers[2].queues)
         self.assertFalse(master.workers[2].exclusive)
 
     @patch.object(os, 'waitpid')
     def test_check_workers(self, waitpid_mock):
         exit_cb = MagicMock()
-        worker = MagicMock(app='testapp', queues='testqueues', pid='testpid')
-        master = WorkerMaster(exit_callback=exit_cb)
+        worker = MagicMock(queues='testqueues', pid='testpid')
+        master = WorkerMaster('testapp', exit_callback=exit_cb)
         master.workers = [worker]
         waitpid_mock.return_value = ('testpid', 0)
         self.assertTrue(master._check_workers())
@@ -225,8 +225,8 @@ class TestWorkerMaster(unittest.TestCase):
     @patch.object(os, 'waitpid')
     def test_check_workers_no_children(self, waitpid_mock):
         exit_cb = MagicMock()
-        worker = MagicMock(app='testapp', queues='testqueues', pid='testpid')
-        master = WorkerMaster(exit_callback=exit_cb)
+        worker = MagicMock(queues='testqueues', pid='testpid')
+        master = WorkerMaster('testapp', exit_callback=exit_cb)
         master.workers = [worker]
         waitpid_mock.side_effect = OSError(errno.ECHILD, 'No child processes')
         self.assertFalse(master._check_workers())
@@ -237,8 +237,8 @@ class TestWorkerMaster(unittest.TestCase):
     @patch.object(os, 'waitpid')
     def test_check_workers_other_oserror(self, waitpid_mock):
         exit_cb = MagicMock()
-        worker = MagicMock(app='testapp', queues='testqueues', pid='testpid')
-        master = WorkerMaster(exit_callback=exit_cb)
+        worker = MagicMock(queues='testqueues', pid='testpid')
+        master = WorkerMaster('testapp', exit_callback=exit_cb)
         master.workers = [worker]
         waitpid_mock.side_effect = OSError(99, 'Something else')
         self.assertRaises(OSError, master._check_workers)
@@ -252,7 +252,7 @@ class TestWorkerMaster(unittest.TestCase):
         worker = _WorkerProcess(app, ['testqueue'], None, None, None, None,
                                 False)
         worker._run = MagicMock()
-        master = WorkerMaster()
+        master = WorkerMaster('testapp')
         fork_mock.return_value = 0
         master._start_worker(worker)
         fork_mock.assert_called_with()
@@ -262,7 +262,7 @@ class TestWorkerMaster(unittest.TestCase):
     @patch.object(os, 'fork')
     def test_start_worker_parent(self, fork_mock):
         worker = MagicMock()
-        master = WorkerMaster()
+        master = WorkerMaster('testapp')
         fork_mock.return_value = 13
         self.assertEqual(13, master._start_worker(worker))
         fork_mock.assert_called_with()
@@ -274,7 +274,7 @@ class TestWorkerMaster(unittest.TestCase):
         worker = _WorkerProcess(app, ['testqueue'], None, None, None, None,
                                 False)
         worker._run = MagicMock()
-        master = WorkerMaster(worker_data={'test': 'data'})
+        master = WorkerMaster('testapp', worker_data={'test': 'data'})
         fork_mock.return_value = 0
         self.assertRaises(RuntimeError, get_worker_data, 'test')
         master._start_worker(worker)
@@ -290,7 +290,7 @@ class TestWorkerMaster(unittest.TestCase):
         worker = _WorkerProcess(app, ['testqueue'], None, None, None, None,
                                 False)
         worker._run = MagicMock()
-        master = WorkerMaster()
+        master = WorkerMaster('testapp')
         fork_mock.return_value = 0
         self.assertRaises(RuntimeError, get_worker_app)
         master._start_worker(worker)
@@ -301,9 +301,9 @@ class TestWorkerMaster(unittest.TestCase):
 
     def test_restart_workers(self):
         start_cb = MagicMock()
-        worker1 = MagicMock(app='testapp', queues='testqueues', pid='testpid1')
-        worker2 = MagicMock(app='testapp', queues='testqueues', pid=None)
-        master = WorkerMaster(start_callback=start_cb)
+        worker1 = MagicMock(queues='testqueues', pid='testpid1')
+        worker2 = MagicMock(queues='testqueues', pid=None)
+        master = WorkerMaster('testapp', start_callback=start_cb)
         master._start_worker = MagicMock(return_value='testpid2')
         master.workers = [worker1, worker2]
         master._restart_workers()
@@ -318,7 +318,7 @@ class TestWorkerMaster(unittest.TestCase):
         worker1 = MagicMock(pid='testpid1')
         worker2 = MagicMock(pid='testpid2')
         worker3 = MagicMock(pid='testpid3')
-        master = WorkerMaster()
+        master = WorkerMaster('testapp')
         master.workers = [worker1, worker2, worker3]
         self.assertRaises(OSError, master._stop_workers)
         kill_mock.assert_any_call('testpid1', signal.SIGTERM)
@@ -331,10 +331,10 @@ class TestWorkerMaster(unittest.TestCase):
         waitpid_mock.side_effect = [('testpid1', 0),
                                     OSError(errno.ESRCH, 'No such pid'),
                                     OSError(99, 'Something else')]
-        worker1 = MagicMock(app='testapp', queues=None, pid='testpid1')
-        worker2 = MagicMock(app='testapp', queues=None, pid='testpid2')
-        worker3 = MagicMock(app='testapp', queues=None, pid='testpid3')
-        master = WorkerMaster(exit_callback=exit_cb)
+        worker1 = MagicMock(queues=None, pid='testpid1')
+        worker2 = MagicMock(queues=None, pid='testpid2')
+        worker3 = MagicMock(queues=None, pid='testpid3')
+        master = WorkerMaster('testapp', exit_callback=exit_cb)
         master.workers = [worker1, worker2, worker3]
         self.assertRaises(OSError, master.wait)
         waitpid_mock.assert_any_call('testpid1', 0)
@@ -344,7 +344,7 @@ class TestWorkerMaster(unittest.TestCase):
         exit_cb.assert_any_call(None, 'testpid2', None)
 
     def test_run(self):
-        master = WorkerMaster()
+        master = WorkerMaster('testapp')
         master._restart_workers = MagicMock(side_effect=[None, ValueError])
         master._check_workers = MagicMock()
         master._stop_workers = MagicMock()
