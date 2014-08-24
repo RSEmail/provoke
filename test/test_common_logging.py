@@ -75,6 +75,3 @@ class TestLoggingFunctions(unittest.TestCase):
         self.assertTrue(log_msg.startswith('testmsg: '))
         self.assertTrue('"type": "Exception"' in log_msg)
         self.assertTrue('"value": "testexcmsg"' in log_msg)
-
-
-# vim:et:fdm=marker:sts=4:sw=4:ts=4

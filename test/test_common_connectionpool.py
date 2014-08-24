@@ -57,6 +57,3 @@ class TestConnectionPool(unittest.TestCase):
         pool = ConnectionPool(None)
         pool.release(conn)
         conn.close.assert_called_with()
-
-
-# vim:et:fdm=marker:sts=4:sw=4:ts=4

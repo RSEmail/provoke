@@ -172,6 +172,3 @@ class TestWorkerApplication(unittest.TestCase):
         app.register_task.assert_any_call(mod.func1, 't_func1', None)
         app.register_task.assert_any_call(mod.func2, 't_func2', None)
         app.declare_task.assert_called_with('testgroup', 'testtask')
-
-
-# vim:et:fdm=marker:sts=4:sw=4:ts=4

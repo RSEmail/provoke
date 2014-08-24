@@ -353,6 +353,3 @@ class TestWorkerMaster(unittest.TestCase):
         master._restart_workers.assert_called_with()
         master._check_workers.assert_called_with()
         master._stop_workers.assert_called_with()
-
-
-# vim:et:fdm=marker:sts=4:sw=4:ts=4

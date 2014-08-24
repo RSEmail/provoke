@@ -186,6 +186,3 @@ class TestConfiguration(unittest.TestCase):
         ret = read_configuration_files(files, configparser=configparser)
         configparser.read.assert_called_with(files)
         self.assertEqual(configparser, ret)
-
-
-# vim:et:fdm=marker:sts=4:sw=4:ts=4

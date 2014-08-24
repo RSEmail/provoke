@@ -86,6 +86,3 @@ class TestMySQLConnection(unittest.TestCase):
             self.fail('ValueError was suppressed or not raised')
         conn_func_mock.assert_called_with()
         conn_mock.close.assert_called_with()
-
-
-# vim:et:fdm=marker:sts=4:sw=4:ts=4

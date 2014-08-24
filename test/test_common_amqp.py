@@ -124,6 +124,3 @@ class TestAmqpConnection(unittest.TestCase):
         conn_mock.channel.assert_called_with()
         chan_mock.close.assert_called_with()
         conn_mock.close.assert_called_with()
-
-
-# vim:et:fdm=marker:sts=4:sw=4:ts=4

@@ -149,6 +149,3 @@ class MySQLConnection(object):
         except Exception:
             if not exc_type:
                 raise
-
-
-# vim:et:fdm=marker:sts=4:sw=4:ts=4
