@@ -123,10 +123,10 @@ class WorkerMain(object):
             time.sleep(1.0)
             self.worker_callback(*arg, **kwargs)
 
-        master = WorkerMaster(start_callback=self.start_callback,
+        master = WorkerMaster(self.app, start_callback=self.start_callback,
                               exit_callback=self.exit_callback)
         for worker_queues, worker_params in config.get_workers():
-            master.add_worker(self.app, worker_queues,
+            master.add_worker(worker_queues,
                               start_callback=_worker_callback,
                               task_callback=self.task_callback,
                               return_callback=self.task_return_callback,
