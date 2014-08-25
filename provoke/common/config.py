@@ -124,16 +124,9 @@ class Configuration(object):
 
     def get_worker_master(self):
         try:
-            name = self._config.get('daemon', 'worker')
+            return self._config.get('daemon', 'master')
         except (NoOptionError, NoSectionError):
-            return
-        importable, _, symbol = name.rpartition(':')
-        symbol = symbol or 'worker'
-        try:
-            mod = __import__(importable, fromlist=[symbol], level=0)
-        except ImportError:
-            return
-        return getattr(mod, symbol, None)
+            pass
 
     def get_rlimits(self):
         try:

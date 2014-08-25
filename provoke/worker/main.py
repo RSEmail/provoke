@@ -36,7 +36,7 @@ import resource
 from optparse import OptionParser, OptionGroup
 
 from ..common.config import load_configuration, read_configuration_files
-from ..common import system
+from ..common import system, import_attr
 from .master import WorkerMaster
 from . import v1
 
@@ -61,13 +61,20 @@ def start_master():
                       help='Configuration file')
     parser.add_option('--daemon', action='store_true', default=False,
                       help='Daemonize the master process.')
+    parser.add_option('--worker-master', metavar='WHERE',
+                      help='Attempt to load the worker master from WHERE, '
+                      'e.g. someapp.worker:master')
 
     options, extra = parser.parse_args()
 
     configparser = read_configuration_files(options.config)
     config = load_configuration(configparser)
 
-    master = config.get_worker_master()
+    try:
+        what = options.worker_master or config.get_worker_master()
+        master = import_attr(what, 'master')
+    except (ImportError, AttributeError, ValueError):
+        parser.error('Could not find importable worker master.')
 
     pidfile = None
     user, group, umask = None, None, None
