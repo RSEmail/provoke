@@ -15,7 +15,7 @@ from amqp.exceptions import AccessRefused
 from mock import patch, MagicMock, ANY
 
 from provoke.common.amqp import AmqpConnection
-from provoke.worker.master import _WorkerProcess, WorkerMaster, \
+from provoke.worker import _WorkerProcess, WorkerMaster, \
     get_worker_data, get_worker_app, DiscardTask
 
 
@@ -37,8 +37,7 @@ class TestWorkerProcess(unittest.TestCase):
     @patch.object(AmqpConnection, '__exit__')
     def test_consume(self, amqp_exit_mock, amqp_enter_mock):
         app = MagicMock()
-        worker = _WorkerProcess(app, ['testqueue'], 1, None, None, None,
-                                'exclusive')
+        worker = _WorkerProcess(app, ['testqueue'], 1, None, None, 'exclusive')
         channel = MagicMock(callbacks=True)
         def set_done(timeout):
             channel.callbacks = False
@@ -60,8 +59,7 @@ class TestWorkerProcess(unittest.TestCase):
         task_cb = MagicMock()
         return_cb = MagicMock()
         app.tasks.func.apply.return_value = 'return'
-        worker = _WorkerProcess(app, None, None, None, task_cb, return_cb,
-                                False)
+        worker = _WorkerProcess(app, None, None, task_cb, return_cb, False)
         worker.counter = 0
         channel = MagicMock()
         body = '{"task_name": "func", "args": [1], "kwargs": {"two": 2}}'
@@ -76,7 +74,7 @@ class TestWorkerProcess(unittest.TestCase):
     def test_on_message_task_callback(self):
         app = MagicMock()
         task_cb = MagicMock(side_effect=SystemExit)
-        worker = _WorkerProcess(app, None, None, None, task_cb, None, False)
+        worker = _WorkerProcess(app, None, None, task_cb, None, False)
         worker.counter = 0
         channel = MagicMock(callbacks={1: None, 2: None})
         body = '{"task_name": "func", "args": [1], "kwargs": {"two": 2}}'
@@ -90,7 +88,7 @@ class TestWorkerProcess(unittest.TestCase):
         app = MagicMock()
         task_cb = MagicMock(side_effect=DiscardTask)
         return_cb = MagicMock()
-        worker = _WorkerProcess(app, None, None, None, task_cb, return_cb,
+        worker = _WorkerProcess(app, None, None, task_cb, return_cb,
                                 False)
         worker.counter = 0
         channel = MagicMock(callbacks={1: None, 2: None})
@@ -104,7 +102,7 @@ class TestWorkerProcess(unittest.TestCase):
 
     def test_on_message_limit(self):
         app = MagicMock()
-        worker = _WorkerProcess(app, None, 1, None, None, None, False)
+        worker = _WorkerProcess(app, None, 1, None, None, False)
         worker.counter = 0
         channel = MagicMock(callbacks={1: None, 2: None})
         def clear_callbacks(consumer_tag):
@@ -122,7 +120,7 @@ class TestWorkerProcess(unittest.TestCase):
         app = MagicMock()
         return_cb = MagicMock()
         app.tasks.func.apply.side_effect = ValueError
-        worker = _WorkerProcess(app, None, 2, None, None, return_cb, False)
+        worker = _WorkerProcess(app, None, 2, None, return_cb, False)
         worker.counter = 0
         channel = MagicMock()
         body = '{"task_name": "func", "args": [1], "kwargs": {"two": 2}}'
@@ -134,43 +132,34 @@ class TestWorkerProcess(unittest.TestCase):
         self.assertFalse(channel.basic_cancel.called)
 
     def test_run(self):
-        worker_start_callback = MagicMock()
         worker_task_callback = MagicMock()
         worker = _WorkerProcess('testapp', ['testqueue'], 10,
-                                worker_start_callback, worker_task_callback,
-                                None, False)
+                                worker_task_callback, None, False)
         worker._consume = MagicMock(side_effect=SystemExit)
         worker._run()
         self.assertFalse(worker_task_callback.called)
-        worker_start_callback.assert_called_with(['testqueue'])
         worker._consume.assert_called_with()
 
     @patch.object(time, 'sleep')
     def test_run_accessrefused(self, sleep_mock):
-        worker_start_callback = MagicMock()
         worker_task_callback = MagicMock()
         worker = _WorkerProcess('testapp', ['testqueue'], 10,
-                                worker_start_callback, worker_task_callback,
-                                None, False)
+                                worker_task_callback, None, False)
         worker._consume = MagicMock(side_effect=[AccessRefused, None])
         worker._run()
         self.assertFalse(worker_task_callback.called)
         sleep_mock.assert_called_once_with(ANY)
-        worker_start_callback.assert_called_with(['testqueue'])
         worker._consume.assert_called_with()
 
     @patch.object(traceback, 'print_exc')
     def test_run_exception(self, print_exc_mock):
-        worker_start_callback = MagicMock()
         worker_task_callback = MagicMock()
         worker = _WorkerProcess('testapp', ['testqueue'], 10,
-                                worker_start_callback, worker_task_callback,
-                                None, False)
+                                worker_task_callback, None, False)
         worker._consume = MagicMock(side_effect=AssertionError)
         self.assertRaises(AssertionError, worker._run)
         self.assertFalse(worker_task_callback.called)
         print_exc_mock.assert_called_with()
-        worker_start_callback.assert_called_with(['testqueue'])
         worker._consume.assert_called_with()
 
 
@@ -249,8 +238,7 @@ class TestWorkerMaster(unittest.TestCase):
     @patch.object(os, '_exit')
     def test_start_worker_child(self, exit_mock, fork_mock):
         app = MagicMock()
-        worker = _WorkerProcess(app, ['testqueue'], None, None, None, None,
-                                False)
+        worker = _WorkerProcess(app, ['testqueue'], None, None, None, False)
         worker._run = MagicMock()
         master = WorkerMaster('testapp')
         fork_mock.return_value = 0
@@ -271,8 +259,7 @@ class TestWorkerMaster(unittest.TestCase):
     @patch.object(os, '_exit')
     def test_get_worker_data(self, exit_mock, fork_mock):
         app = MagicMock()
-        worker = _WorkerProcess(app, ['testqueue'], None, None, None, None,
-                                False)
+        worker = _WorkerProcess(app, ['testqueue'], None, None, None, False)
         worker._run = MagicMock()
         master = WorkerMaster('testapp', worker_data={'test': 'data'})
         fork_mock.return_value = 0
@@ -287,8 +274,7 @@ class TestWorkerMaster(unittest.TestCase):
     @patch.object(os, '_exit')
     def test_get_worker_app(self, exit_mock, fork_mock):
         app = MagicMock()
-        worker = _WorkerProcess(app, ['testqueue'], None, None, None, None,
-                                False)
+        worker = _WorkerProcess(app, ['testqueue'], None, None, None, False)
         worker._run = MagicMock()
         master = WorkerMaster('testapp')
         fork_mock.return_value = 0

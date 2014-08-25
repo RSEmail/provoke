@@ -121,18 +121,6 @@ class TestConfiguration(unittest.TestCase):
         declare_mock.assert_called_with('testgroup', exchange='testexchange',
                                         routing_key='testkey')
 
-    def test_get_workers(self):
-        cfgparser = MagicMock()
-        cfg = Configuration(cfgparser)
-        cfgparser.sections.return_value = ['other', 'worker:test']
-        cfgparser.get.return_value = 'one'
-        cfgparser.getint.side_effect = [2, 20]
-        cfgparser.getboolean.return_value = True
-        workers = cfg.get_workers()
-        self.assertEqual([(['one'], {'num_processes': 2, 'exclusive': True,
-                                     'task_limit': 20})],
-                         workers)
-
     def test_get_rlimits(self):
         cfgparser = MagicMock()
         cfg = Configuration(cfgparser)

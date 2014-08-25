@@ -31,6 +31,7 @@ from __future__ import unicode_literals, absolute_import
 from flask import Blueprint as FlaskBlueprint
 from werkzeug.exceptions import default_exceptions
 
+from .route import RouteBase
 from .util import unquote_url_values, json_error_handler
 
 __all__ = ['Blueprint']
@@ -47,15 +48,20 @@ class Blueprint(FlaskBlueprint):
     :func:`~provoke.api.util.json_response` decorator to ensure dict objects
     are serialized into JSON responses.
 
+    :param worker_app: The application backend that knows how to enqueue and
+                       execute tasks. This object will be accessible to 
+    :type worker_app: :class:`~provoke.common.app.WorkerApplication`
+
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, worker_app=None, *args, **kwargs):
         super(Blueprint, self).__init__(*args, **kwargs)
         self.url_value_preprocessor(unquote_url_values)
         self.errorhandler(Exception)(json_error_handler)
         for code in default_exceptions.keys():
             if code != 500:
                 self.errorhandler(code)(json_error_handler)
+        self.worker_app = worker_app
 
     def register_route(self, route, view_class, view_name=None):
         """Blueprint route registration convenience function. It registers
@@ -65,7 +71,14 @@ class Blueprint(FlaskBlueprint):
         :type route: str
         :param view_class: The class used to handle requests on the route.
         :type view_class: :class:`flask.views.View`
+        :param view_name: Custom view name to use instead of
+                          ``view_class.__name__``.
+        :type view_name: str
 
         """
         view_name = view_class.__name__
-        self.add_url_rule(route, view_func=view_class.as_view(view_name))
+        if issubclass(view_class, RouteBase):
+            view_func = view_class.as_view(view_name, self.worker_app)
+        else:
+            raise TypeError('Expected sub-class of RouteBase.')
+        self.add_url_rule(route, view_func=view_func)

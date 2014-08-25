@@ -122,22 +122,18 @@ class Configuration(object):
                     params['routing_key'] = params.pop('queue')
                 WorkerApplication.declare_taskgroup(tg_name, **params)
 
-    def get_workers(self):
-        workers = []
-        section_prefix = 'worker:'
-        for section in self._config.sections():
-            if section.startswith(section_prefix):
-                params = {}
-                self._from_config(params, section, 'queues', opt_type='list')
-                self._from_config(params, section, 'processes', opt_type='int',
-                                  dict_key='num_processes')
-                self._from_config(params, section, 'task_limit',
-                                  opt_type='int')
-                self._from_config(params, section, 'exclusive', 
-                                  opt_type='bool')
-                queues = params.pop('queues', [])
-                workers.append((queues, params))
-        return workers
+    def get_worker_master(self):
+        try:
+            name = self._config.get('daemon', 'worker')
+        except (NoOptionError, NoSectionError):
+            return
+        importable, _, symbol = name.rpartition(':')
+        symbol = symbol or 'worker'
+        try:
+            mod = __import__(importable, fromlist=[symbol], level=0)
+        except ImportError:
+            return
+        return getattr(mod, symbol, None)
 
     def get_rlimits(self):
         try:
