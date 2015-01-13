@@ -21,6 +21,11 @@
 # SOFTWARE.
 #
 
+"""This module defines a set of routines for gathering needed information from
+a config file.
+
+"""
+
 from __future__ import absolute_import
 
 import re
@@ -35,6 +40,12 @@ _COMMA_DELIMITER = re.compile(r',\s*')
 
 
 class Configuration(object):
+    """This class streamlines the process of reading data from config files.
+    
+    :param config: The config parser object.
+    :type config: :py:class:`~ConfigParser.SafeConfigParser`
+
+    """
 
     def __init__(self, config):
         super(Configuration, self).__init__()

@@ -29,12 +29,25 @@ as a provoke RESTful API blueprint.
 from __future__ import unicode_literals, absolute_import
 
 from flask import Blueprint as FlaskBlueprint
+from flask.views import MethodView
 from werkzeug.exceptions import default_exceptions
 
-from .route import RouteBase
 from .util import unquote_url_values, json_error_handler
 
-__all__ = ['Blueprint']
+__all__ = ['Blueprint', 'RouteBase']
+
+
+class RouteBase(MethodView):
+    """Intended as a parent class for implementing an API route. This class
+    inherits from Flask's :class:`~flask.views.MethodView`, so you should
+    implement methods that correpond to the HTTP verb, e.g. ``.post()`` for
+    ``POST`` requests.
+
+    """
+
+    def __init__(self, worker_app):
+        super(RouteBase, self).__init__()
+        self.worker_app = worker_app
 
 
 class Blueprint(FlaskBlueprint):
@@ -49,7 +62,8 @@ class Blueprint(FlaskBlueprint):
     are serialized into JSON responses.
 
     :param worker_app: The application backend that knows how to enqueue and
-                       execute tasks. This object will be accessible to 
+                       execute tasks. This object will be accessible to routes
+                       as their ``self.worker_app`` attribute.
     :type worker_app: :class:`~provoke.common.app.WorkerApplication`
 
     """

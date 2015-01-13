@@ -24,12 +24,15 @@
 """Manages pools of connections that may be reused. These pools may be shared
 between threads. If is shared to a separate process, it is reset to empty.
 
+This module should only be needed for developing new context managers, like
+:class:`~provoke.common.mysql.MySQLConnection`, that can utilize a pool of
+connections in a thread-safe manner.
+
 """
 
 from __future__ import absolute_import
 
 import os
-import threading
 from Queue import Queue, Empty, Full
 
 __all__ = ['ConnectionPool']

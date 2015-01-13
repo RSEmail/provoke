@@ -5,6 +5,8 @@ connections are closed after use.
 
 .. py:class:: _MySQLContext
 
+   This is the object returned by the :class:`MySQLConnection` context manager.
+
    .. py:attribute:: conn
 
       Database connection object, conforming to the Python DB API 2.0. This
@@ -20,10 +22,6 @@ connections are closed after use.
 
       A reference to the module containing the DB API 2.0 interface that the
       connection was made with. This is useful for accessing exception classes.
-
-   .. py:meth:: close
-
-      Closes the connection associated with this object.
 
 """
 
@@ -80,7 +78,7 @@ class MySQLConnection(object):
     """Context manager that allows easy connection to databases by name using
     configured connection parameters. For example::
 
-        MySQLConnection.set_connection_params('admin', {...})
+        MySQLConnection.set_connection_params('admin', host='...')
 
         with MySQLConnection('admin') as admin:
             try:

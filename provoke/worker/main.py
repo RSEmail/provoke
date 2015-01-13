@@ -71,7 +71,11 @@ def start_master():
             raise TypeError
     except TypeError:
         pass
+
     cfg = Configuration(cfgparser)
+    cfg.configure_taskgroups()
+    cfg.configure_amqp()
+    cfg.configure_mysql()
 
     try:
         what = options.worker_master or cfg.get_worker_master()
