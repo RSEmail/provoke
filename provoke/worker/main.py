@@ -28,17 +28,15 @@ reads necessary information from configuration.
 
 from __future__ import absolute_import
 
-import os
 import sys
-import time
 import signal
 import resource
-from optparse import OptionParser, OptionGroup
+from optparse import OptionParser
+from ConfigParser import SafeConfigParser
 
-from ..common.config import load_configuration, read_configuration_files
-from ..common import system, import_attr
-from .master import WorkerMaster
-from . import v1
+from ..common.config import Configuration
+from ..common import import_attr
+from . import system
 
 
 class ReloadSignal(Exception):
@@ -67,11 +65,17 @@ def start_master():
 
     options, extra = parser.parse_args()
 
-    configparser = read_configuration_files(options.config)
-    config = load_configuration(configparser)
+    cfgparser = SafeConfigParser()
+    try:
+        if not cfgparser.read(options.config):
+            raise TypeError
+    except TypeError:
+        parser.error('Could not find configuration file!')
+
+    cfg = Configuration(cfgparser)
 
     try:
-        what = options.worker_master or config.get_worker_master()
+        what = options.worker_master or cfg.get_worker_master()
         master = import_attr(what, 'master')
     except (ImportError, AttributeError, ValueError):
         parser.error('Could not find importable worker master.')
@@ -84,13 +88,13 @@ def start_master():
 
     master._internal_process_callback = process_init
 
-    for res, limits in config.get_rlimits():
+    for res, limits in cfg.get_rlimits():
         resource.setrlimit(res, limits)
 
     if options.daemon:
-        pidfile = config.get_pidfile()
-        stdout, stderr, stdin = config.get_stdio_redirects()
-        user, group, umask = config.get_worker_privileges()
+        pidfile = cfg.get_pidfile()
+        stdout, stderr, stdin = cfg.get_stdio_redirects()
+        user, group, umask = cfg.get_worker_privileges()
         if stdout or stderr or stdin:
             system.redirect_stdio(stdout, stderr, stdin)
         system.daemonize()

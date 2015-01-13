@@ -12,4 +12,7 @@ setup(name='provoke',
           'amqp': ['amqp'],
           'api': ['flask', 'jsonschema'],
           'mysql': ['MySQL-python'],
-      })
+      },
+      entry_points={'console_scripts': [
+          'provoke-worker = provoke.worker.main:main',
+        ]})

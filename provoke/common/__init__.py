@@ -40,7 +40,7 @@ def import_attr(what, default_attr=None):
     :raises: ImportError, AttributeError, ValueError
 
     """
-    importable, _, attr = name.partition(':')
+    importable, _, attr = what.partition(':')
     attr = attr or default_attr
     mod = __import__(importable, fromlist=[attr], level=0)
     return getattr(mod, attr)
