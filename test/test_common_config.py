@@ -1,12 +1,11 @@
 
-import os
 import unittest
 import resource
 from ConfigParser import NoOptionError
 
 from mock import patch, MagicMock
 
-from provoke.common.config import Configuration, read_configuration_files
+from provoke.common.config import Configuration
 from provoke.common.app import WorkerApplication
 from provoke.common.amqp import AmqpConnection
 from provoke.common.mysql import MySQLConnection
@@ -68,20 +67,24 @@ class TestConfiguration(unittest.TestCase):
         cfgparser.get.assert_called_with('sec', 'one')
         self.assertEqual(['one', 'two', 'three'], ret['one'])
 
+    @patch.object(MySQLConnection, 'reset_connection_params')
     @patch.object(MySQLConnection, 'set_connection_params')
-    def test_configure_databases(self, set_mock):
+    def test_configure_mysql(self, set_mock, reset_mock):
         cfgparser = MagicMock()
         cfg = Configuration(cfgparser)
         cfgparser.sections.return_value = ['one', 'mysql:test']
-        cfgparser.get.side_effect = ['testuser',
+        cfgparser.get.side_effect = [
+            'testuser',
             'testpass',
             'testhost',
             'testdb',
             'testcharset',
             NoOptionError('mysql:test', 'unix_socket')]
         cfgparser.getint.side_effect = [3306, 10]
-        cfg._configure_mysql()
-        set_mock.assert_called_with('test',
+        cfg.configure_mysql()
+        reset_mock.assert_called_with()
+        set_mock.assert_called_with(
+            'test',
             user='testuser',
             passwd='testpass',
             host='testhost',
@@ -95,29 +98,33 @@ class TestConfiguration(unittest.TestCase):
         cfgparser = MagicMock()
         cfg = Configuration(cfgparser)
         cfgparser.sections.return_value = ['one', 'amqp']
-        cfgparser.get.side_effect = ['testhost',
+        cfgparser.get.side_effect = [
+            'testhost',
             'testuser',
             'testpass',
             NoOptionError('amqp', 'virtual_host')]
         cfgparser.getint.return_value = 5672
         cfgparser.getfloat.side_effect = [30.0, 10.0]
-        cfg._configure_amqp()
-        set_mock.assert_called_with(userid='testuser',
+        cfg.configure_amqp()
+        set_mock.assert_called_with(
+            userid='testuser',
             password='testpass',
             host='testhost',
             port=5672,
             heartbeat=30.0,
             connect_timeout=10.0)
 
+    @patch.object(WorkerApplication, 'reset_taskgroups')
     @patch.object(WorkerApplication, 'declare_taskgroup')
-    def test_configure_taskgroups(self, declare_mock):
+    def test_configure_taskgroups(self, declare_mock, reset_mock):
         cfgparser = MagicMock()
         cfg = Configuration(cfgparser)
         cfgparser.sections.return_value = ['one', 'taskgroup:testgroup']
         cfgparser.get.side_effect = [NoOptionError(None, 'queue'),
                                      'testkey',
                                      'testexchange']
-        cfg._configure_taskgroups()
+        cfg.configure_taskgroups()
+        reset_mock.assert_called_with()
         declare_mock.assert_called_with('testgroup', exchange='testexchange',
                                         routing_key='testkey')
 
@@ -167,10 +174,3 @@ class TestConfiguration(unittest.TestCase):
         cfgparser.get.assert_any_call('daemon', 'user')
         cfgparser.get.assert_any_call('daemon', 'group')
         cfgparser.get.assert_any_call('daemon', 'umask')
-
-    def test_read_configuration_files(self):
-        files = ['one', 'two.conf', 'three.conf']
-        configparser = MagicMock()
-        ret = read_configuration_files(files, configparser=configparser)
-        configparser.read.assert_called_with(files)
-        self.assertEqual(configparser, ret)

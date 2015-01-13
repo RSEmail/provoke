@@ -24,14 +24,11 @@
 from __future__ import absolute_import
 
 import re
-import os
-import os.path
 import resource
 from ast import literal_eval
-from collections import defaultdict
-from ConfigParser import SafeConfigParser, NoOptionError, NoSectionError
+from ConfigParser import NoOptionError, NoSectionError
 
-__all__ = ['load_configuration', 'read_configuration_files']
+__all__ = ['Configuration']
 
 
 _COMMA_DELIMITER = re.compile(r',\s*')
@@ -63,11 +60,19 @@ class Configuration(object):
         except (NoOptionError, NoSectionError):
             pass
 
-    def _configure_mysql(self):
+    def configure_mysql(self):
+        """Searches for config sections prefixed with ``mysql:`` and loads them
+        into the global dictionary of MySQL databases.
+
+        The section name after the prefix will be the name of the database for
+        later use.
+
+        """
         try:
             from .mysql import MySQLConnection
         except ImportError:
             return
+        MySQLConnection.reset_connection_params()
         section_prefix = 'mysql:'
         for section in self._config.sections():
             if section.startswith(section_prefix):
@@ -85,11 +90,20 @@ class Configuration(object):
                                   opt_type='int')
                 MySQLConnection.set_connection_params(db_name, **params)
 
-    def _configure_amqp(self):
+    def configure_amqp(self):
+        """Loads AMQP connection information from the config section ``amqp``.
+        This connection information will be available globally.
+
+        If this section does not exist, or if this method is not called, the
+        default connection parameters will look for a server running on
+        localhost.
+
+        """
         try:
             from .amqp import AmqpConnection
         except ImportError:
             return
+        AmqpConnection.set_connection_params()
         section = 'amqp'
         if self._config.has_section(section):
             params = {}
@@ -103,11 +117,16 @@ class Configuration(object):
                               opt_type='float')
             AmqpConnection.set_connection_params(**params)
 
-    def _configure_taskgroups(self):
+    def configure_taskgroups(self):
+        """Searches for sections prefixed with ``taskgroup:`` and loads them
+        into the global dictionary of application taskgroups.
+
+        """
         try:
             from .app import WorkerApplication
         except ImportError:
             return
+        WorkerApplication.reset_taskgroups()
         section_prefix = 'taskgroup:'
         for section in self._config.sections():
             if section.startswith(section_prefix):
@@ -122,35 +141,33 @@ class Configuration(object):
                     params['routing_key'] = params.pop('queue')
                 WorkerApplication.declare_taskgroup(tg_name, **params)
 
-    def get_worker_master(self):
+    def get_worker_master(self, section='daemon'):
         try:
-            return self._config.get('daemon', 'master')
+            return self._config.get(section, 'master')
         except (NoOptionError, NoSectionError):
             pass
 
-    def get_rlimits(self):
+    def get_rlimits(self, section='daemon'):
         try:
-            max_fd = self._config.getint('daemon', 'max-fd')
+            max_fd = self._config.getint(section, 'max-fd')
             yield resource.RLIMIT_NOFILE, (max_fd, max_fd)
         except (NoOptionError, NoSectionError):
             pass
 
-    def get_pidfile(self):
+    def get_pidfile(self, section='daemon'):
         try:
-            return self._config.get('daemon', 'pidfile')
+            return self._config.get(section, 'pidfile')
         except (NoOptionError, NoSectionError):
             pass
 
-    def get_stdio_redirects(self):
-        section = 'daemon'
+    def get_stdio_redirects(self, section='daemon'):
         info = {}
         self._from_config(info, section, 'stdout')
         self._from_config(info, section, 'stderr')
         self._from_config(info, section, 'stdin')
         return info.get('stdout'), info.get('stderr'), info.get('stdin')
 
-    def get_worker_privileges(self):
-        section = 'daemon'
+    def get_worker_privileges(self, section='daemon'):
         info = {}
         self._from_config(info, section, 'user')
         self._from_config(info, section, 'group')
@@ -158,17 +175,3 @@ class Configuration(object):
         if 'umask' in info:
             info['umask'] = literal_eval(info['umask'])
         return info.get('user'), info.get('group'), info.get('umask')
-
-
-def load_configuration(configparser):
-    config = Configuration(configparser)
-    config._configure_amqp()
-    config._configure_mysql()
-    config._configure_taskgroups()
-    return config
-
-
-def read_configuration_files(paths, configparser=None):
-    configparser = configparser or SafeConfigParser()
-    configparser.read(paths)
-    return configparser

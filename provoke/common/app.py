@@ -313,6 +313,11 @@ class WorkerApplication(object):
         self.tasks = _TaskSet(self)
 
     @classmethod
+    def reset_taskgroups(cls):
+        """Removes all known taskgroups."""
+        cls._taskgroups = {}
+
+    @classmethod
     def declare_taskgroup(cls, name, exchange='', routing_key=None):
         """Associates a name with a set of routing information. Tasks that are
         a member of a given taskgroup will use its routing information. Tasks

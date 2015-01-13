@@ -6,5 +6,5 @@ pep8
 
 flask
 jsonschema
-passlib
 MySQL-python
+amqp

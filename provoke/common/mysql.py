@@ -44,11 +44,20 @@ class _MySQLContext(object):
         self.conn = MySQLdb.connect(**params)
         self.params = params
         self.module = MySQLdb
+        self._set_session_vars()
         host = params.get('host', 'localhost')
         user = params.get('user')
         db = params.get('db')
         log_debug('Connection established', logger='mysql',
                   host=host, user=user, db=db)
+
+    def _set_session_vars(self):
+        cur = self.conn.cursor()
+        try:
+            cur.execute("""SET SESSION `time_zone` = '+00:00'""")
+            self.conn.commit()
+        finally:
+            cur.close()
 
     def check(self):
         try:
@@ -100,6 +109,11 @@ class MySQLConnection(object):
         super(MySQLConnection, self).__init__()
         self.db_names = db_names
         self.db_conns = [None]*len(db_names)
+
+    @classmethod
+    def reset_connection_params(cls):
+        """Removes all existing connection parameter information."""
+        cls._connection_params = {}
 
     @classmethod
     def set_connection_params(cls, db_name, **params):

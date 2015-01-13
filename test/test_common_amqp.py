@@ -1,7 +1,7 @@
 
 import unittest
 
-from mock import patch, MagicMock, ANY
+from mock import patch, MagicMock
 import amqp
 
 from provoke.common.amqp import AmqpConnection, _PoolableAmqp
@@ -17,7 +17,6 @@ class TestPoolableAmqp(unittest.TestCase):
         ctx = _PoolableAmqp(one=1)
         self.assertTrue(ctx.check())
         conn_class_mock.assert_called_with(one=1)
-        conn.channel.assert_called_with()
         conn.send_heartbeat.assert_called_with()
 
     @patch.object(amqp, 'Connection')
@@ -27,28 +26,23 @@ class TestPoolableAmqp(unittest.TestCase):
         ctx = _PoolableAmqp(one=1)
         self.assertFalse(ctx.check())
         conn_class_mock.assert_called_with(one=1)
-        conn.channel.assert_called_with()
         conn.send_heartbeat.assert_called_with()
 
     @patch.object(amqp, 'Connection')
     def test_close(self, conn_class_mock):
         conn_class_mock.return_value = conn = MagicMock()
-        conn.channel.return_value = channel = MagicMock()
         ctx = _PoolableAmqp(one=1)
         ctx.close()
         conn_class_mock.assert_called_with(one=1)
-        channel.close.assert_called_with()
         conn.close.assert_called_with()
 
     @patch.object(amqp, 'Connection')
     def test_close_fd(self, conn_class_mock):
         conn_class_mock.return_value = conn = MagicMock()
-        conn.channel.return_value = channel = MagicMock()
-        channel.close.side_effect = ValueError
+        conn.close.side_effect = ValueError
         ctx = _PoolableAmqp(one=1)
         self.assertRaises(ValueError, ctx.close)
         conn_class_mock.assert_called_with(one=1)
-        channel.close.assert_called_with()
         conn.sock.close.assert_called_with()
 
 
@@ -65,7 +59,7 @@ class TestAmqpConnection(unittest.TestCase):
                           'username': 'testuser',
                           'password': 'testpass'},
                          AmqpConnection._connection_params)
-        conn_class_mock.return_value = conn_mock = MagicMock()
+        conn_class_mock.return_value = MagicMock()
         AmqpConnection._connection_params = old
 
     @patch.object(amqp, 'Connection')

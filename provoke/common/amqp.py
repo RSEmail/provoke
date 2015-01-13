@@ -42,7 +42,6 @@ class _PoolableAmqp(object):
     def __init__(self, **kwargs):
         super(_PoolableAmqp, self).__init__()
         self.conn = amqp.Connection(**kwargs)
-        self.channel = self.conn.channel()
         host = kwargs.get('host', 'localhost')
         user = kwargs.get('userid', 'guest')
         vhost = kwargs.get('virtual_host', '/')
@@ -58,7 +57,6 @@ class _PoolableAmqp(object):
 
     def close(self):
         try:
-            self.channel.close()
             self.conn.close()
         except Exception:
             try:
@@ -113,10 +111,15 @@ class AmqpConnection(object):
     def __enter__(self):
         pool = self._get_pool()
         self.conn = pool.get()
-        return self.conn.channel
+        self.channel = self.conn.conn.channel()
+        return self.channel
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         pool = self._get_pool()
+        try:
+            self.channel.close()
+        except Exception:
+            pass
         try:
             if exc_type:
                 self.conn.close()
