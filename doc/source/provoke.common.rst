@@ -5,9 +5,6 @@
 .. automodule:: provoke.common
    :members:
 
-Common Modules
---------------
-
 .. toctree::
 
    provoke.common.config
