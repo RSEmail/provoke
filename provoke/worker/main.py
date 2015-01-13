@@ -70,8 +70,7 @@ def start_master():
         if not cfgparser.read(options.config):
             raise TypeError
     except TypeError:
-        parser.error('Could not find configuration file!')
-
+        pass
     cfg = Configuration(cfgparser)
 
     try:
