@@ -205,7 +205,7 @@ class _TaskCaller(object):
         start_time = time.time()
         if correlation_id is None:
             correlation_id = str(uuid4())
-        job = {'task_name': self.name,
+        job = {'task': self.name,
                'args': args,
                'kwargs': kwargs}
         job_raw = json.dumps(job)

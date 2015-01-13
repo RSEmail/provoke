@@ -128,28 +128,30 @@ class _WorkerProcess(object):
 
     def _handle_message(self, msg):
         body = json.loads(msg.body)
-        call = getattr(self.app.tasks, body['task_name'])
+        task_name = body['task']
+        task_args = body.get('args', [])
+        task_kwargs = body.get('kwargs')
+        task_id = getattr(msg, 'correlation_id', None)
+        call = getattr(self.app.tasks, task_name)
         skip = False
-        _current_worker_data['correlation_id'] = msg.correlation_id
+        _current_worker_data['correlation_id'] = task_id
         _current_worker_data['redelivered'] = \
             msg.delivery_info.get('redelivered')
         if self.task_callback:
             try:
-                self.task_callback(body['task_name'], body['args'],
-                                   body['kwargs'])
+                self.task_callback(task_name, task_args, task_kwargs)
             except DiscardTask:
                 skip = True
         if not skip:
             try:
-                ret = call.apply(body['args'], body['kwargs'],
-                                 msg.correlation_id)
+                ret = call.apply(task_args, task_kwargs, task_id)
             except Exception:
                 if self.return_callback:
-                    self.return_callback(body['task_name'], None)
+                    self.return_callback(task_name, None)
                 raise
             else:
                 if self.return_callback:
-                    self.return_callback(body['task_name'], ret)
+                    self.return_callback(task_name, ret)
 
     def _on_message(self, channel, msg):
         try:
