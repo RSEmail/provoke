@@ -24,60 +24,6 @@
 """Common worker application module. Provides the interface with which
 producers and executors see the task system.
 
-.. class:: _AsyncResult
-
-   Used to query for the results of an asynchronous operation.
-
-   .. attribute:: correlation_id
-
-      The identifier string used to correlate the AMQP message with the entry
-      in the results backend.
-
-   .. attribute:: name
-
-      The name of the task.
-
-   .. attribute:: timestamp
-
-      The UNIX timestamp as returned by :func:`time.time` when this task was
-      initially triggered.
-
-   .. method:: get(timeout=None)
-
-      Returns the task result when it becomes available. If the result was an
-      exception, the exception is re-raised by this method.
-
-      :param timeout: If this many seconds elapse before the result is ready,
-                      this method will stop and return ``None``. The default
-                      is to wait indefinitely.
-      :type timeout: float
-      :raises: NotImplementedError
-
-   .. method:: wait(timeout=None)
-
-      Waits for the task result to become available. It does not return the
-      result or re-raise any exceptions.
-
-      :param timeout: Wait at most this many seconds.
-      :type timeout: float
-      :raises: NotImplementedError
-
-   .. method:: ready()
-
-      Checks if the result is immediately available. If so, the :meth:`.get`
-      and :meth:`.wait` methods will return immediately.
-
-      :rtype: bool
-      :raises: NotImplementedError
-
-   .. method:: successful()
-
-      Checks if the result is both available and the task result will not
-      re-raise an exception.
-
-      :rtype: bool
-      :raises: NotImplementedError
-
 .. class:: _TaskCaller
 
    This object represents a task that may be called synchronously in the
@@ -94,7 +40,7 @@ producers and executors see the task system.
       :type kwargs: keyword arguments
       :returns: A way to retrieve the result of the task's execution when it
                 is ready.
-      :rtype: :class:`_AsyncResult`
+      :rtype: :class:`AsyncResult`
 
    .. method:: apply_async(args, kwargs=None, correlation_id=None,
                            routing_key=None, **log_extra)
@@ -118,7 +64,7 @@ producers and executors see the task system.
       :type log_extra: keyword arguments
       :returns: A way to retrieve the result of the task's execution when it
                 is ready.
-      :rtype: :class:`_AsyncResult`
+      :rtype: :class:`AsyncResult`
 
    .. method:: apply(args, kwargs=None, correlation_id=None)
 
@@ -151,7 +97,11 @@ from __future__ import absolute_import
 
 import time
 import json
+import cPickle
+import errno
 from uuid import uuid4
+from socket import timeout as socket_timeout, error as socket_error
+from multiprocessing import TimeoutError
 
 import amqp
 
@@ -161,26 +111,165 @@ from .logging import log_info, log_debug
 __all__ = ['WorkerApplication']
 
 
-class _AsyncResult(object):
+class AsyncResult(object):
+    """Used to query for the results of an asynchronous operation. Compatible
+    with the builtin :py:class:`multiprocessing.pool.AsyncResult` class
+    interface.
 
-    def __init__(self, app, correlation_id, name, timestamp):
-        super(_AsyncResult, self).__init__()
-        self.app = app
+    :param correlation_id: The ID used to identify tasks and correlate their
+                           request and response messages.
+    :type correlation_id: str
+
+    """
+
+    def __init__(self, correlation_id):
+        super(AsyncResult, self).__init__()
         self.correlation_id = correlation_id
-        self.name = name
-        self.timestamp = timestamp
+
+    @property
+    def args(self):
+        """If the result is available, these will be a tuple of the original
+        positional and keyword arguments sent with the request.
+
+        """
+        if self.ready():
+            return (self._result['args'], self._result['kwargs'])
+        raise AttributeError
+
+    @property
+    def name(self):
+        """If the result is available, this will be the string name of the
+        completed task.
+
+        """
+        if self.ready():
+            return self._result['task_name']
+        raise AttributeError
+
+    @property
+    def returned(self):
+        """If the result is available and was successful, this will be the
+        returned value of the completed task.
+
+        """
+        if self.ready():
+            if hasattr(self, '_return'):
+                return self._return
+        raise AttributeError
+
+    @property
+    def exception(self):
+        """If the result is available and was not successful, this will be the
+        exception object raised by the completed task.
+
+        """
+        if self.ready():
+            if hasattr(self, '_exc'):
+                return self._exc
+        raise AttributeError
+
+    @property
+    def traceback(self):
+        """If the result is available and was not successful, this will be the
+        exception traceback from the completed task.
+
+        """
+        if self.ready():
+            if hasattr(self, '_exc'):
+                return self._result['exception']['traceback']
+        raise AttributeError
+
+    def _get_cached_result(self):
+        if hasattr(self, '_return'):
+            return self._return
+        elif hasattr(self, '_exc'):
+            raise self._exc
+
+    def _on_message(self, msg):
+        self._result = res = json.loads(msg.body)
+        if 'return' in res:
+            self._return = res['return']
+        elif 'exception' in res:
+            exception_raw = res['exception']['value'].encode('ascii')
+            self._exc = cPickle.loads(exception_raw)
 
     def get(self, timeout=None):
-        raise NotImplementedError()
+        """Returns the task result when it becomes available. If the result was
+        an exception, the exception is re-raised by this method.
+
+        :param timeout: If this many seconds elapse before the result is ready,
+                        this method will stop and return ``None``. The default
+                        is to wait indefinitely.
+        :type timeout: float
+        :raises: :py:exc:`~multiprocessing.TimeoutError`
+
+        """
+        if hasattr(self, '_result'):
+            return self._get_cached_result()
+        start_time = time.time()
+        with AmqpConnection() as channel:
+            try:
+                channel.basic_consume(queue=self.correlation_id,
+                                      no_ack=True, callback=self._on_message)
+            except amqp.exceptions.NotFound:
+                raise KeyError(self.correlation_id)
+            while channel.callbacks:
+                elapsed = time.time() - start_time
+                cur_timeout = 10.0
+                if timeout is not None:
+                    remaining = timeout - elapsed
+                    cur_timeout = max(min(remaining, 10.0), 0.0)
+                try:
+                    channel.connection.drain_events(timeout=cur_timeout)
+                except socket_timeout:
+                    channel.connection.send_heartbeat()
+                except socket_error as exc:
+                    if exc.errno != errno.EAGAIN:
+                        raise
+                if hasattr(self, '_result'):
+                    channel.queue_delete(self.correlation_id)
+                    return self._get_cached_result()
+                if timeout is not None and remaining <= 0.0:
+                    break
+        raise TimeoutError(timeout)
 
     def wait(self, timeout=None):
-        raise NotImplementedError()
+        """Waits for the task result to become available. It does not return
+        the result or re-raise any exceptions.
+
+        :param timeout: Wait at most this many seconds.
+        :type timeout: float
+
+        """
+        if hasattr(self, '_result'):
+            return
+        try:
+            self.get(timeout)
+        except Exception:
+            pass
 
     def ready(self):
-        raise NotImplementedError()
+        """Checks if the result is immediately available. If so, the
+        :meth:`.get` and :meth:`.wait` methods will return immediately.
+
+        :rtype: bool
+
+        """
+        if hasattr(self, '_result'):
+            return True
+        self.wait(0.0)
+        return hasattr(self, '_result')
 
     def successful(self):
-        raise NotImplementedError()
+        """Checks if the result is both available and the task result will not
+        re-raise an exception.
+
+        :rtype: bool
+
+        """
+        if self.ready():
+            return hasattr(self, '_return')
+        return False
 
 
 class _TaskCaller(object):
@@ -201,7 +290,6 @@ class _TaskCaller(object):
 
     def apply_async(self, args, kwargs=None, correlation_id=None,
                     routing_key=None,  **log_extra):
-        start_time = time.time()
         if correlation_id is None:
             correlation_id = str(uuid4())
         job = {'task': self.name,
@@ -210,10 +298,15 @@ class _TaskCaller(object):
         job_raw = json.dumps(job)
         msg = amqp.Message(job_raw,
                            content_type='application/json',
+                           reply_to=correlation_id,
                            correlation_id=correlation_id)
         if routing_key is None:
             routing_key = self.routing_key
         with AmqpConnection() as channel:
+            args = {'x-expires': self.app.result_queue_ttl}
+            channel.queue_declare(queue=correlation_id,
+                                  auto_delete=False,
+                                  arguments=args)
             channel.basic_publish(msg, exchange=self.exchange,
                                   routing_key=routing_key)
         log_info('Task queued', logger='tasks',
@@ -222,7 +315,7 @@ class _TaskCaller(object):
         log_debug('Task details', logger='tasks',
                   id=correlation_id,
                   name=self.name, args=args, kwargs=kwargs)
-        return _AsyncResult(self.app, correlation_id, self.name, start_time)
+        return AsyncResult(correlation_id)
 
     def apply(self, args, kwargs=None, correlation_id=None):
         log_info('Task starting', logger='tasks',
@@ -293,12 +386,18 @@ class WorkerApplication(object):
     """Defines an application that has a set of tasks that may be executed
     asynchronously by worker processes.
 
+    :param result_queue_ttl: For tasks that provide results, this is the
+                             timeout in milliseconds before the result queue
+                             expires and is deleted. Default is two hours.
+    :type result_queue_ttl: int
+
     """
 
     _taskgroups = {}
 
-    def __init__(self):
+    def __init__(self, result_queue_ttl=7200000):
         super(WorkerApplication, self).__init__()
+        self.result_queue_ttl = result_queue_ttl
 
         #: This attribute should be used by clients to call tasks by name. For
         #: example, to call a task registered as ``'do_stuff'``::

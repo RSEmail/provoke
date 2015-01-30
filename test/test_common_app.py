@@ -1,12 +1,15 @@
 
 import unittest
+import time
 import json
+from socket import timeout as socket_timeout
+from multiprocessing import TimeoutError
 
 from mock import patch, MagicMock, ANY
 import amqp
 
 from provoke.common.amqp import AmqpConnection
-from provoke.common.app import _AsyncResult, _TaskCaller, \
+from provoke.common.app import AsyncResult, _TaskCaller, \
     _TaskSet, taskgroup, WorkerApplication
 
 
@@ -25,27 +28,125 @@ class JsonMatcher(object):
 class TestAsyncResult(unittest.TestCase):
 
     def test_attributes(self):
-        res = _AsyncResult('testapp', 'testid', 'testname', 1234.0)
-        self.assertEqual('testapp', res.app)
+        res = AsyncResult('testid')
         self.assertEqual('testid', res.correlation_id)
-        self.assertEqual('testname', res.name)
-        self.assertEqual(1234.0, res.timestamp)
+        self.assertRaises(AttributeError, getattr, res, 'args')
+        self.assertRaises(AttributeError, getattr, res, 'name')
+        self.assertRaises(AttributeError, getattr, res, 'returned')
+        self.assertRaises(AttributeError, getattr, res, 'exception')
+        self.assertRaises(AttributeError, getattr, res, 'traceback')
+        res._result = {'args': 123, 'kwargs': 456, 'task_name': 'test',
+                       'exception': {'traceback': 'test traceback'}}
+        self.assertEqual((123, 456), res.args)
+        self.assertEqual('test', res.name)
+        res._return = 789
+        self.assertEqual(789, res.returned)
+        del res._return
+        res._exc = 987
+        self.assertEqual(987, res.exception)
+        self.assertEqual('test traceback', res.traceback)
 
-    def test_get(self):
-        res = _AsyncResult(None, None, None, None)
-        self.assertRaises(NotImplementedError, res.get)
+    def test_on_message(self):
+        res = AsyncResult(None)
+        msg = MagicMock(body='{"task_name": "test", "return": 123}')
+        res._on_message(msg)
+        self.assertEqual(123, res._return)
+        self.assertFalse(hasattr(res, '_exc'))
 
-    def test_wait(self):
-        res = _AsyncResult(None, None, None, None)
-        self.assertRaises(NotImplementedError, res.wait)
+    def test_on_message_fail(self):
+        res = AsyncResult(None)
+        body = '{"task_name": "test", "exception": {"value": "I123\\n."}}'
+        msg = MagicMock(body=body)
+        res._on_message(msg)
+        self.assertEqual(123, res._exc)
+        self.assertFalse(hasattr(res, '_return'))
 
-    def test_ready(self):
-        res = _AsyncResult(None, None, None, None)
-        self.assertRaises(NotImplementedError, res.ready)
+    def test_get_cached(self):
+        res = AsyncResult(None)
+        res._result = True
+        res._return = 123
+        self.assertEqual(123, res.get())
+        del res._return
+        res._exc = ValueError
+        self.assertRaises(ValueError, res.get)
 
-    def test_successful(self):
-        res = _AsyncResult(None, None, None, None)
-        self.assertRaises(NotImplementedError, res.successful)
+    @patch.object(AmqpConnection, '__enter__')
+    @patch.object(AmqpConnection, '__exit__')
+    def test_get(self, exit_mock, enter_mock):
+        enter_mock.return_value = channel = MagicMock()
+        exit_mock.return_value = None
+        res = AsyncResult('test')
+
+        def finish(timeout):
+            res._result = True
+            res._return = 123
+        channel.connection.drain_events.side_effect = finish
+        self.assertEqual(123, res.get())
+        exit_mock.assert_called_with(None, None, None)
+        channel.basic_consume.assert_called_with(queue='test', no_ack=True,
+                                                 callback=ANY)
+        channel.connection.drain_events.assert_called_with(timeout=10.0)
+        channel.queue_delete.assert_called_with('test')
+        self.assertFalse(channel.connection.send_heartbeat.called)
+
+    @patch.object(AmqpConnection, '__enter__')
+    @patch.object(AmqpConnection, '__exit__')
+    def test_get_keyerror(self, exit_mock, enter_mock):
+        enter_mock.return_value = channel = MagicMock()
+        exit_mock.return_value = None
+        channel.basic_consume.side_effect = amqp.exceptions.NotFound
+        res = AsyncResult('test')
+        self.assertRaises(KeyError, res.get)
+        channel.basic_consume.assert_called_with(queue='test', no_ack=True,
+                                                 callback=ANY)
+        self.assertFalse(channel.connection.drain_events.called)
+        self.assertFalse(channel.queue_delete.called)
+        self.assertFalse(channel.connection.send_heartbeat.called)
+
+    @patch.object(AmqpConnection, '__enter__')
+    @patch.object(AmqpConnection, '__exit__')
+    @patch.object(time, 'time')
+    def test_get_timeout(self, time_mock, exit_mock, enter_mock):
+        enter_mock.return_value = channel = MagicMock()
+        time_mock.side_effect = [0.0, 20.0]
+        channel.connection.drain_events.side_effect = socket_timeout
+        res = AsyncResult('test')
+        self.assertRaises(TimeoutError, res.get, 10.0)
+        channel.basic_consume.assert_called_with(queue='test', no_ack=True,
+                                                 callback=ANY)
+        channel.connection.drain_events.assert_called_with(timeout=0.0)
+        channel.connection.send_heartbeat.assert_called_with()
+
+    @patch.object(AsyncResult, 'get')
+    def test_wait(self, get_mock):
+        res = AsyncResult(None)
+        res._return = True
+        res.wait()
+        del res._return
+        get_mock.side_effect = ValueError
+        res.wait()
+
+    @patch.object(AsyncResult, 'wait')
+    def test_ready(self, wait_mock):
+        res = AsyncResult(None)
+        self.assertFalse(res.ready())
+        res._result = True
+        self.assertTrue(res.ready())
+        res._exc = True
+        self.assertTrue(res.ready())
+        wait_mock.assert_called_once_with(0.0)
+
+    @patch.object(AsyncResult, 'ready')
+    def test_successful(self, ready_mock):
+        res = AsyncResult(None)
+        ready_mock.return_value = False
+        self.assertFalse(res.successful())
+        ready_mock.return_value = True
+        res._return = True
+        self.assertTrue(res.successful())
+        del res._return
+        res._exc = True
+        self.assertFalse(res.successful())
 
 
 class TestTaskCall(unittest.TestCase):
@@ -63,16 +164,17 @@ class TestTaskCall(unittest.TestCase):
         channel = MagicMock()
         amqp_enter_mock.return_value = channel
         msg_mock.return_value = 52
-        app = MagicMock()
+        app = MagicMock(result_queue_ttl=0)
         call = _TaskCaller('testfunc', 'testname', app, 'testexchange',
                            'testqueue')
         ret = call.apply_async(('one', 'two'), {'three': 'four'})
-        self.assertTrue(isinstance(ret, _AsyncResult))
+        self.assertTrue(isinstance(ret, AsyncResult))
         body_matcher = JsonMatcher(self, {'task': 'testname',
                                           'args': ['one', 'two'],
                                           'kwargs': {'three': 'four'}})
         msg_mock.assert_called_with(body_matcher,
                                     content_type='application/json',
+                                    reply_to=ANY,
                                     correlation_id=ANY)
         amqp_enter_mock.assert_called_with()
         channel.basic_publish.assert_called_with(52, exchange='testexchange',

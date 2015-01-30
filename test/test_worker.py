@@ -53,7 +53,15 @@ class TestWorkerProcess(unittest.TestCase):
         channel.connection.send_heartbeat.assert_called_with()
         amqp_exit_mock.assert_called_with(None, None, None)
 
-    def test_on_message(self):
+    def test_send_result(self):
+        channel = MagicMock()
+        worker = _WorkerProcess(None, None, None, None, None, False)
+        worker._send_result(channel, 'test', {})
+        channel.basic_publish.assert_called_with(ANY, exchange='',
+                                                 routing_key='test')
+
+    @patch.object(_WorkerProcess, '_send_result')
+    def test_on_message(self, send_result_mock):
         app = MagicMock()
         task_cb = MagicMock()
         return_cb = MagicMock()
@@ -62,12 +70,13 @@ class TestWorkerProcess(unittest.TestCase):
         worker.counter = 0
         channel = MagicMock()
         body = '{"task": "func", "args": [1], "kwargs": {"two": 2}}'
-        msg = MagicMock(body=body, correlation_id='testid')
+        msg = MagicMock(body=body, correlation_id='testid', reply_to='test')
         worker._on_message(channel, msg)
         task_cb.assert_called_with('func', [1], {'two': 2})
         app.tasks.func.apply.assert_called_with([1], {'two': 2}, 'testid')
         channel.basic_ack.assert_called_with(ANY)
         return_cb.assert_called_with('func', 'return')
+        send_result_mock.assert_called_with(channel, 'test', ANY)
         self.assertFalse(channel.basic_cancel.called)
 
     def test_on_message_task_callback(self):
@@ -109,14 +118,15 @@ class TestWorkerProcess(unittest.TestCase):
             channel.callbacks = {}
         channel.basic_cancel.side_effect = clear_callbacks
         body = '{"task": "func", "args": [1], "kwargs": {"two": 2}}'
-        msg = MagicMock(body=body, correlation_id='testid')
+        msg = MagicMock(body=body, correlation_id='testid', reply_to=None)
         worker._on_message(channel, msg)
         app.tasks.func.apply.assert_called_with([1], {'two': 2}, 'testid')
         channel.basic_ack.assert_called_with(ANY)
         channel.basic_cancel.assert_any_call(1)
         channel.basic_cancel.assert_any_call(2)
 
-    def test_on_message_task_fail(self):
+    @patch.object(_WorkerProcess, '_send_result')
+    def test_on_message_task_fail(self, send_result_mock):
         app = MagicMock()
         return_cb = MagicMock()
         app.tasks.func.apply.side_effect = ValueError
@@ -124,10 +134,11 @@ class TestWorkerProcess(unittest.TestCase):
         worker.counter = 0
         channel = MagicMock()
         body = '{"task": "func", "args": [1], "kwargs": {"two": 2}}'
-        msg = MagicMock(body=body, correlation_id='testid')
+        msg = MagicMock(body=body, correlation_id='testid', reply_to='test')
         self.assertRaises(ValueError, worker._on_message, channel, msg)
         app.tasks.func.apply.assert_called_with([1], {'two': 2}, 'testid')
         return_cb.assert_called_with('func', None)
+        send_result_mock.assert_called_with(channel, 'test', ANY)
         channel.basic_reject.assert_called_with(ANY, requeue=False)
         self.assertFalse(channel.basic_cancel.called)
 
