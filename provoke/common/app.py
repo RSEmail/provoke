@@ -284,6 +284,7 @@ class _TaskCaller(object):
             self.routing_key = name
         else:
             self.routing_key = routing_key
+        self.send_result = getattr(func, '_send_result', False)
 
     def delay(self, *args, **kwargs):
         return self.apply_async(args, kwargs)
@@ -298,15 +299,16 @@ class _TaskCaller(object):
         job_raw = json.dumps(job)
         msg = amqp.Message(job_raw,
                            content_type='application/json',
-                           reply_to=correlation_id,
+                           reply_to=(self.send_result and correlation_id),
                            correlation_id=correlation_id)
         if routing_key is None:
             routing_key = self.routing_key
         with AmqpConnection() as channel:
-            args = {'x-expires': self.app.result_queue_ttl}
-            channel.queue_declare(queue=correlation_id,
-                                  auto_delete=False,
-                                  arguments=args)
+            if self.send_result:
+                args = {'x-expires': self.app.result_queue_ttl}
+                channel.queue_declare(queue=correlation_id,
+                                      auto_delete=False,
+                                      arguments=args)
             channel.basic_publish(msg, exchange=self.exchange,
                                   routing_key=routing_key)
         log_info('Task queued', logger='tasks',
@@ -315,7 +317,8 @@ class _TaskCaller(object):
         log_debug('Task details', logger='tasks',
                   id=correlation_id,
                   name=self.name, args=args, kwargs=kwargs)
-        return AsyncResult(correlation_id)
+        if self.send_result:
+            return AsyncResult(correlation_id)
 
     def apply(self, args, kwargs=None, correlation_id=None):
         log_info('Task starting', logger='tasks',
@@ -380,6 +383,22 @@ def taskgroup(name):
         func._taskgroup = name
         return func
     return deco
+
+
+def send_results(func):
+    """Function decorator indicating that when this task is executed, its
+    return value (or raised exception) will be available in the
+    :class:`AsyncResult` object returned by :meth:`~_TaskCaller.apply_async`.
+
+    Behind the scenes, the :meth:`~_TaskCaller.apply_async` method will
+    register a reply queue that will be sent along with the task message. When
+    the worker finishes the task and sees that it has a reply queue, it will
+    serialize the result and put it in the queue. The :meth:`AsyncResult.get`
+    will attempt to retrive that result from the reply queue.
+
+    """
+    func._send_results = True
+    return func
 
 
 class WorkerApplication(object):

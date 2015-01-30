@@ -39,6 +39,7 @@ import traceback
 from socket import timeout as socket_timeout
 from functools import partial
 
+import amqp
 from amqp.exceptions import AccessRefused
 
 from ..common.amqp import AmqpConnection

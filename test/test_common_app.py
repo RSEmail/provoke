@@ -165,8 +165,8 @@ class TestTaskCall(unittest.TestCase):
         amqp_enter_mock.return_value = channel
         msg_mock.return_value = 52
         app = MagicMock(result_queue_ttl=0)
-        call = _TaskCaller('testfunc', 'testname', app, 'testexchange',
-                           'testqueue')
+        func = MagicMock(_send_result=True)
+        call = _TaskCaller(func, 'testname', app, 'testexchange', 'testqueue')
         ret = call.apply_async(('one', 'two'), {'three': 'four'})
         self.assertTrue(isinstance(ret, AsyncResult))
         body_matcher = JsonMatcher(self, {'task': 'testname',
