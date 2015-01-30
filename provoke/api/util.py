@@ -32,7 +32,7 @@ import collections
 from functools import wraps
 
 from jsonschema import Draft4Validator, ValidationError, FormatChecker
-from flask import request, json, current_app
+from flask import request, json
 from werkzeug.urls import url_unquote
 from werkzeug.exceptions import HTTPException, BadRequest, UnsupportedMediaType
 from werkzeug.wrappers import BaseResponse

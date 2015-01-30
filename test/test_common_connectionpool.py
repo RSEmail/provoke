@@ -1,7 +1,7 @@
 
 import unittest
 
-from mock import patch, MagicMock, ANY
+from mock import patch, MagicMock
 
 from provoke.common.connectionpool import ConnectionPool
 

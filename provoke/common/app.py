@@ -152,7 +152,6 @@ from __future__ import absolute_import
 import time
 import json
 from uuid import uuid4
-from itertools import repeat
 
 import amqp
 

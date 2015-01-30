@@ -41,7 +41,7 @@ _COMMA_DELIMITER = re.compile(r',\s*')
 
 class Configuration(object):
     """This class streamlines the process of reading data from config files.
-    
+
     :param config: The config parser object.
     :type config: :py:class:`~ConfigParser.SafeConfigParser`
 

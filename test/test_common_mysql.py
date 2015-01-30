@@ -1,8 +1,7 @@
 
 import unittest
-import sqlite3
 
-from mock import patch, MagicMock, ANY
+from mock import patch, MagicMock
 import MySQLdb
 
 from provoke.common.mysql import MySQLConnection, _MySQLContext

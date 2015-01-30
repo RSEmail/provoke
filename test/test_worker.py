@@ -1,7 +1,6 @@
 
 import unittest
 import os
-import sys
 import time
 import errno
 import signal
@@ -9,7 +8,6 @@ import traceback
 import json
 from socket import timeout as socket_timeout
 
-import amqp
 from amqp.exceptions import AccessRefused
 
 from mock import patch, MagicMock, ANY
@@ -39,6 +37,7 @@ class TestWorkerProcess(unittest.TestCase):
         app = MagicMock()
         worker = _WorkerProcess(app, ['testqueue'], 1, None, None, 'exclusive')
         channel = MagicMock(callbacks=True)
+
         def set_done(timeout):
             channel.callbacks = False
             raise socket_timeout
@@ -105,6 +104,7 @@ class TestWorkerProcess(unittest.TestCase):
         worker = _WorkerProcess(app, None, 1, None, None, False)
         worker.counter = 0
         channel = MagicMock(callbacks={1: None, 2: None})
+
         def clear_callbacks(consumer_tag):
             channel.callbacks = {}
         channel.basic_cancel.side_effect = clear_callbacks

@@ -30,7 +30,6 @@ reason, a new one is created.
 from __future__ import absolute_import
 
 import os
-import sys
 import time
 import json
 import errno
@@ -39,7 +38,6 @@ import traceback
 from socket import timeout as socket_timeout
 from functools import partial
 
-import amqp
 from amqp.exceptions import AccessRefused
 
 from ..common.amqp import AmqpConnection

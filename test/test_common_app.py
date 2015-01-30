@@ -65,7 +65,7 @@ class TestTaskCall(unittest.TestCase):
         msg_mock.return_value = 52
         app = MagicMock()
         call = _TaskCaller('testfunc', 'testname', app, 'testexchange',
-                          'testqueue')
+                           'testqueue')
         ret = call.apply_async(('one', 'two'), {'three': 'four'})
         self.assertTrue(isinstance(ret, _AsyncResult))
         body_matcher = JsonMatcher(self, {'task': 'testname',
@@ -145,6 +145,7 @@ class TestWorkerApplication(unittest.TestCase):
         @taskgroup('testgroup')
         def func1():
             pass
+
         def func2():
             pass
         app = WorkerApplication()
