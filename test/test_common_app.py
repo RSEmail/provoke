@@ -68,7 +68,7 @@ class TestTaskCall(unittest.TestCase):
                           'testqueue')
         ret = call.apply_async(('one', 'two'), {'three': 'four'})
         self.assertTrue(isinstance(ret, _AsyncResult))
-        body_matcher = JsonMatcher(self, {'task_name': 'testname',
+        body_matcher = JsonMatcher(self, {'task': 'testname',
                                           'args': ['one', 'two'],
                                           'kwargs': {'three': 'four'}})
         msg_mock.assert_called_with(body_matcher,

@@ -62,7 +62,7 @@ class TestWorkerProcess(unittest.TestCase):
         worker = _WorkerProcess(app, None, None, task_cb, return_cb, False)
         worker.counter = 0
         channel = MagicMock()
-        body = '{"task_name": "func", "args": [1], "kwargs": {"two": 2}}'
+        body = '{"task": "func", "args": [1], "kwargs": {"two": 2}}'
         msg = MagicMock(body=body, correlation_id='testid')
         worker._on_message(channel, msg)
         task_cb.assert_called_with('func', [1], {'two': 2})
@@ -77,7 +77,7 @@ class TestWorkerProcess(unittest.TestCase):
         worker = _WorkerProcess(app, None, None, task_cb, None, False)
         worker.counter = 0
         channel = MagicMock(callbacks={1: None, 2: None})
-        body = '{"task_name": "func", "args": [1], "kwargs": {"two": 2}}'
+        body = '{"task": "func", "args": [1], "kwargs": {"two": 2}}'
         msg = MagicMock(body=body, correlation_id='testid')
         self.assertRaises(SystemExit, worker._on_message, channel, msg)
         task_cb.assert_called_with('func', [1], {'two': 2})
@@ -92,7 +92,7 @@ class TestWorkerProcess(unittest.TestCase):
                                 False)
         worker.counter = 0
         channel = MagicMock(callbacks={1: None, 2: None})
-        body = '{"task_name": "func", "args": [1], "kwargs": {"two": 2}}'
+        body = '{"task": "func", "args": [1], "kwargs": {"two": 2}}'
         msg = MagicMock(body=body, correlation_id='testid')
         worker._on_message(channel, msg)
         task_cb.assert_called_with('func', [1], {'two': 2})
@@ -108,7 +108,7 @@ class TestWorkerProcess(unittest.TestCase):
         def clear_callbacks(consumer_tag):
             channel.callbacks = {}
         channel.basic_cancel.side_effect = clear_callbacks
-        body = '{"task_name": "func", "args": [1], "kwargs": {"two": 2}}'
+        body = '{"task": "func", "args": [1], "kwargs": {"two": 2}}'
         msg = MagicMock(body=body, correlation_id='testid')
         worker._on_message(channel, msg)
         app.tasks.func.apply.assert_called_with([1], {'two': 2}, 'testid')
@@ -123,7 +123,7 @@ class TestWorkerProcess(unittest.TestCase):
         worker = _WorkerProcess(app, None, 2, None, return_cb, False)
         worker.counter = 0
         channel = MagicMock()
-        body = '{"task_name": "func", "args": [1], "kwargs": {"two": 2}}'
+        body = '{"task": "func", "args": [1], "kwargs": {"two": 2}}'
         msg = MagicMock(body=body, correlation_id='testid')
         self.assertRaises(ValueError, worker._on_message, channel, msg)
         app.tasks.func.apply.assert_called_with([1], {'two': 2}, 'testid')
