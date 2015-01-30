@@ -101,6 +101,34 @@ class Configuration(object):
                                   opt_type='int')
                 MySQLConnection.set_connection_params(db_name, **params)
 
+    def configure_http(self):
+        """Searches for config sections prefixed with ``http:`` and loads them
+        into the global dictionary of HTTP endpoints.
+
+        The section name after the prefix will be the name of the endpoint for
+        later use.
+
+        """
+        try:
+            from .http import HttpConnection
+        except ImportError:
+            return
+        HttpConnection.reset_connection_params()
+        section_prefix = 'http:'
+        for section in self._config.sections():
+            if section.startswith(section_prefix):
+                name = section[len(section_prefix):]
+                params = {}
+                self._from_config(params, section, 'host')
+                self._from_config(params, section, 'port', opt_type='int')
+                self._from_config(params, section, 'user')
+                self._from_config(params, section, 'password')
+                self._from_config(params, section, 'timeout', opt_type='int')
+                self._from_config(params, section, 'ssl', opt_type='bool')
+                self._from_config(params, section, 'key_file')
+                self._from_config(params, section, 'cert_file')
+                HttpConnection.set_connection_params(name, **params)
+
     def configure_amqp(self):
         """Loads AMQP connection information from the config section ``amqp``.
         This connection information will be available globally.

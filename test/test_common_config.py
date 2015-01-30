@@ -9,6 +9,7 @@ from provoke.common.config import Configuration
 from provoke.common.app import WorkerApplication
 from provoke.common.amqp import AmqpConnection
 from provoke.common.mysql import MySQLConnection
+from provoke.common.http import HttpConnection
 
 
 class TestConfiguration(unittest.TestCase):
@@ -92,6 +93,29 @@ class TestConfiguration(unittest.TestCase):
             db='testdb',
             charset='testcharset',
             connect_timeout=10)
+
+    @patch.object(HttpConnection, 'reset_connection_params')
+    @patch.object(HttpConnection, 'set_connection_params')
+    def test_configure_http(self, set_mock, reset_mock):
+        cfgparser = MagicMock()
+        cfg = Configuration(cfgparser)
+        cfgparser.sections.return_value = ['one', 'http:test']
+        cfgparser.get.side_effect = ['testhost',
+                                     'testuser',
+                                     'testpass',
+                                     NoOptionError(None, None),
+                                     NoOptionError(None, None)]
+        cfgparser.getint.side_effect = [3306,
+                                        NoOptionError(None, None)]
+        cfgparser.getboolean.side_effect = [True]
+        cfg.configure_http()
+        reset_mock.assert_called_with()
+        set_mock.assert_called_with('test',
+                                    host='testhost',
+                                    port=3306,
+                                    user='testuser',
+                                    password='testpass',
+                                    ssl=True)
 
     @patch.object(AmqpConnection, 'set_connection_params')
     def test_configure_amqp(self, set_mock):
