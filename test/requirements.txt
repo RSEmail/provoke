@@ -2,9 +2,4 @@ nose
 mock
 coverage
 nosexcover
-pep8
-
-flask
-jsonschema
-MySQL-python
-amqp
+flake8
