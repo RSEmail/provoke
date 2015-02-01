@@ -7,12 +7,10 @@ setup(name='provoke',
       author='Ian Good',
       author_email='ian.good@rackspace.com',
       packages=find_packages(),
-      install_requires=[],
+      install_requires=['amqp'],
       extras_require={
-          'amqp': ['amqp'],
-          'api': ['flask', 'jsonschema'],
           'mysql': ['MySQL-python'],
       },
       entry_points={'console_scripts': [
           'provoke-worker = provoke.worker.main:main',
-        ]})
+      ]})

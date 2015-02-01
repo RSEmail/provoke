@@ -8,9 +8,9 @@ from multiprocessing import TimeoutError
 from mock import patch, MagicMock, ANY
 import amqp
 
-from provoke.common.amqp import AmqpConnection
-from provoke.common.app import AsyncResult, _TaskCaller, \
-    _TaskSet, taskgroup, WorkerApplication
+from provoke.amqp import AmqpConnection
+from provoke.app import AsyncResult, _TaskCaller, _TaskSet, \
+    taskgroup, WorkerApplication
 
 
 class JsonMatcher(object):

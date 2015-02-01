@@ -34,8 +34,8 @@ import resource
 from optparse import OptionParser
 from ConfigParser import SafeConfigParser
 
-from ..common.config import Configuration
-from ..common import import_attr
+from ..config import Configuration
+from .. import import_attr
 from . import system
 
 

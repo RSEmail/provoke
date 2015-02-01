@@ -4,7 +4,7 @@ import unittest
 from mock import patch, MagicMock
 import httplib
 
-from provoke.common.http import HttpConnection
+from provoke.http import HttpConnection
 
 
 class TestHttpConnection(unittest.TestCase):

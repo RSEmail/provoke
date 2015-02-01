@@ -5,11 +5,11 @@ from ConfigParser import NoOptionError
 
 from mock import patch, MagicMock
 
-from provoke.common.config import Configuration
-from provoke.common.app import WorkerApplication
-from provoke.common.amqp import AmqpConnection
-from provoke.common.mysql import MySQLConnection
-from provoke.common.http import HttpConnection
+from provoke.config import Configuration
+from provoke.app import WorkerApplication
+from provoke.amqp import AmqpConnection
+from provoke.mysql import MySQLConnection
+from provoke.http import HttpConnection
 
 
 class TestConfiguration(unittest.TestCase):

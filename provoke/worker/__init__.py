@@ -42,8 +42,8 @@ from functools import partial
 import amqp
 from amqp.exceptions import AccessRefused
 
-from ..common.amqp import AmqpConnection
-from ..common.logging import log_debug, log_info, log_exception
+from ..amqp import AmqpConnection
+from ..logging import log_debug, log_info, log_exception
 
 __all__ = ['WorkerMaster', 'DiscardTask', 'RequeueTask',
            'get_worker_data', 'get_worker_app']
@@ -73,10 +73,10 @@ def get_worker_data(key, default=None):
 
 def get_worker_app():
     """This function, when called from within tasks running in worker
-    processes, will get the :class:`~provoke.common.app.WorkerApplication`
-    object that is executing the task.
+    processes, will get the :class:`~provoke.app.WorkerApplication` object that
+    is executing the task.
 
-    :rtype: :class:`provoke.common.app.WorkerApplication`
+    :rtype: :class:`provoke.app.WorkerApplication`
     :raises: RuntimeError
 
     """
@@ -234,13 +234,13 @@ class WorkerMaster(object):
 
     :param worker_app: The application backend that knows how to enqueue and
                        execute tasks.
-    :type worker_app: :class:`~provoke.common.app.WorkerApplication`
+    :type worker_app: :class:`~provoke.app.WorkerApplication`
     :param start_callback: This function is called in the master process every
                            time a new worker process is started. This callback
                            is given three parameters, the
-                           :class:`~provoke.common.app.WorkerApplication`, a
-                           list of queues consumed by the new process, and the
-                           PID of the new process.
+                           :class:`~provoke.app.WorkerApplication`, a list of
+                           queues consumed by the new process, and the PID of
+                           the new process.
     :type start_callback: collections.Callable
     :param exit_callback: This function is called in the master process every
                           time a worker process exits for any reason. It is
@@ -317,15 +317,15 @@ class WorkerMaster(object):
         :param task_callback: This function is called inside the child process
                               every time a task is ready for execution. This
                               function is given four arguments, the
-                              :class:`~provoke.common.app.WorkerApplication`,
-                              the task name, and the positional and keyword
-                              arguments of the task.
+                              :class:`~provoke.app.WorkerApplication`, the task
+                              name, and the positional and keyword arguments of
+                              the task.
         :type task_callback: collections.Callable
         :param return_callback: Like ``task_callback`` but called when the
                                 task is completed. This function is given three
                                 arguments, the
-                                :class:`~provoke.common.app.WorkerApplication`,
-                                the task name, and the return value. If an
+                                :class:`~provoke.app.WorkerApplication`, the
+                                task name, and the return value. If an
                                 exception was raised during execution, it will
                                 be available in :func:`sys.exc_info`.
         :type return_callback: collections.Callable

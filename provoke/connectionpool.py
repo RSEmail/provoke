@@ -25,8 +25,8 @@
 between threads. If is shared to a separate process, it is reset to empty.
 
 This module should only be needed for developing new context managers, like
-:class:`~provoke.common.mysql.MySQLConnection`, that can utilize a pool of
-connections in a thread-safe manner.
+:class:`~provoke.mysql.MySQLConnection`, that can utilize a pool of connections
+in a thread-safe manner.
 
 """
 

@@ -4,8 +4,8 @@ import unittest
 from mock import patch, MagicMock
 import amqp
 
-from provoke.common.amqp import AmqpConnection, _PoolableAmqp
-from provoke.common.connectionpool import ConnectionPool
+from provoke.amqp import AmqpConnection, _PoolableAmqp
+from provoke.connectionpool import ConnectionPool
 
 
 @patch.object(ConnectionPool, 'enabled', new=False)

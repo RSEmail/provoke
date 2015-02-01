@@ -6,8 +6,8 @@ import logging.handlers
 
 from mock import patch, MagicMock, ANY
 
-from provoke.common.logging import setup_logging, log_exception, \
-    log_debug, log_info, log_warning, log_error
+from provoke.logging import setup_logging, \
+    log_exception, log_debug, log_info, log_warning, log_error
 
 
 class TestLoggingFunctions(unittest.TestCase):

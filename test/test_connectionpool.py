@@ -3,7 +3,7 @@ import unittest
 
 from mock import patch, MagicMock
 
-from provoke.common.connectionpool import ConnectionPool
+from provoke.connectionpool import ConnectionPool
 
 
 class TestConnectionPool(unittest.TestCase):

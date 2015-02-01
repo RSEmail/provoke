@@ -12,7 +12,7 @@ from amqp.exceptions import AccessRefused
 
 from mock import patch, MagicMock, ANY
 
-from provoke.common.amqp import AmqpConnection
+from provoke.amqp import AmqpConnection
 from provoke.worker import _WorkerProcess, WorkerMaster, \
     get_worker_data, get_worker_app, DiscardTask
 

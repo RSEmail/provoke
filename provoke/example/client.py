@@ -1,7 +1,7 @@
 
 import sys
 
-from provoke.common.app import WorkerApplication
+from provoke.app import WorkerApplication
 
 app = WorkerApplication()
 app.declare_task('do_work')

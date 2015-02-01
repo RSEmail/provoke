@@ -1,7 +1,7 @@
 import os
 
-from provoke.common.amqp import AmqpConnection
-from provoke.common.app import WorkerApplication
+from provoke.amqp import AmqpConnection
+from provoke.app import WorkerApplication
 from provoke.worker import WorkerMaster
 
 

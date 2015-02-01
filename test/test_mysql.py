@@ -4,8 +4,8 @@ import unittest
 from mock import patch, MagicMock
 import MySQLdb
 
-from provoke.common.mysql import MySQLConnection, _MySQLContext
-from provoke.common.connectionpool import ConnectionPool
+from provoke.mysql import MySQLConnection, _MySQLContext
+from provoke.connectionpool import ConnectionPool
 
 
 @patch.object(ConnectionPool, 'enabled', new=False)

@@ -470,7 +470,7 @@ class WorkerApplication(object):
         :type name: str
         :param taskgroup: An optional, previously declared taskgroup name to
                           make the task a member of. This overrides the use of
-                          the :func:`~provoke.common.app.taskgroup` decorator.
+                          the :func:`~provoke.app.taskgroup` decorator.
         :type taskgroup: str
 
         """
@@ -496,7 +496,7 @@ class WorkerApplication(object):
         :type prefix: str
         :param taskgroup: An optional, previously declared taskgroup name to
                           make the task a member of. This overrides the use of
-                          the :func:`~provoke.common.app.taskgroup` decorator.
+                          the :func:`~provoke.app.taskgroup` decorator.
         :type taskgroup: str
         :param what: List of module attribute names to use as tasks. By
                      default, ``mod.__all__`` is used.
