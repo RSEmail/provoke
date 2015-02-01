@@ -1,9 +1,10 @@
 provoke
 =======
 
-Lightweight, asynchronous function execution in Python using AMQP.
+Lightweight, asynchronous function execution in Python using AMQP. Provoke was
+inspired by [Celery][4], but intends to be *much* smaller and less invasive.
 
-## Installation
+### Installation
 
 ```
 sudo pip install provoke
@@ -52,8 +53,10 @@ The easiest way to run the tests is with `nosetests`. You need to install it
 into the virtual environment, even if it is installed system-wide.
 
     pip install -r test/requirements.txt
+    pip install MySQL-python
     nosetests -v
 
 [1]: http://www.virtualenv.org/en/latest/
 [2]: provoke/example/worker.py
 [3]: provoke/example/client.py
+[4]: http://www.celeryproject.org/
