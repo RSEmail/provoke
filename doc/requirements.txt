@@ -1,4 +1,2 @@
 amqp
-flask
-jsonschema
 MySQL-python
