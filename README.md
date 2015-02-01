@@ -12,48 +12,26 @@ pulling task messages from an AMQP queue and executing them. The script uses
 an external Python script, given in configuration or on the command-line, to
 load the information about processes and tasks.
 
-To try it out, you will need a basic RabbitMQ broker running on localhost, with
-a single queue: `work_queue`.
-
-Next, create `test.py` and populate it with this:
-
-```python
-import os
-
-from provoke.common.app import WorkerApplication
-from provoke.worker import WorkerMaster
-
-
-def do_work(one, two):
-    print '===> PID {0}: doing work!'.format(os.getpid())
-    print one
-    print two
-    print '===> PID {0}: done!'.format(os.getpid())
-
-
-app = WorkerApplication()
-app.register_task(do_work)
-
-master = WorkerMaster(app)
-master.add_worker(['work_queue'], num_processes=4)
-```
-
-Start up the provoke worker:
+To try it out, you will need a basic RabbitMQ broker running on localhost. When
+you're ready, start up the provoke worker with the worker example:
 
 ```
-provoke-worker --worker-master test:master
+provoke-worker --worker-master provoke.example.worker
 ```
 
-Finally, send messages to your AMQP `work_queue`:
+In another terminal, use the client example to send a task for execution:
 
-```json
-{
-  "task": "do_work",
-  "args": ["Hello", "World!"]
-}
 ```
+python -m provoke.example.client
+```
+
+Try running the client example with some command-line arguments, and pay
+attention to the different PIDs running the tasks.
 
 As easy as that, you have four processes executing a simple task!
+
+Definitely check out the source code for the [worker example][2] and
+[client example][3] to see how it's done.
 
 ## Development
 
@@ -73,3 +51,5 @@ into the virtual environment, even if it is installed system-wide.
     nosetests -v
 
 [1]: http://www.virtualenv.org/en/latest/
+[2]: provoke/example/worker.py
+[3]: provoke/example/client.py
