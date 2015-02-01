@@ -137,6 +137,7 @@ class _WorkerProcess(object):
         task_args = body.get('args', [])
         task_kwargs = body.get('kwargs')
         task_id = getattr(msg, 'correlation_id', None)
+        reply_to = getattr(msg, 'reply_to', None)
         call = getattr(self.app.tasks, task_name)
         skip = False
         _current_worker_data['correlation_id'] = task_id
@@ -151,17 +152,17 @@ class _WorkerProcess(object):
             try:
                 ret = call.apply(task_args, task_kwargs, task_id)
             except Exception as exc:
-                if msg.reply_to:
+                if reply_to:
                     body['exception'] = {'value': cPickle.dumps(exc),
                                          'traceback': traceback.format_exc()}
-                    self._send_result(channel, msg.reply_to, body)
+                    self._send_result(channel, reply_to, body)
                 if self.return_callback:
                     self.return_callback(task_name, None)
                 raise
             else:
-                if msg.reply_to:
+                if reply_to:
                     body['return'] = ret
-                    self._send_result(channel, msg.reply_to, body)
+                    self._send_result(channel, reply_to, body)
                 if self.return_callback:
                     self.return_callback(task_name, ret)
 

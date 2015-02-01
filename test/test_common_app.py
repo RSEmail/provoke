@@ -167,7 +167,8 @@ class TestTaskCall(unittest.TestCase):
         app = MagicMock(result_queue_ttl=0)
         func = MagicMock(_send_result=True)
         call = _TaskCaller(func, 'testname', app, 'testexchange', 'testqueue')
-        ret = call.apply_async(('one', 'two'), {'three': 'four'})
+        ret = call.apply_async(('one', 'two'), {'three': 'four'},
+                               send_result=True)
         self.assertTrue(isinstance(ret, AsyncResult))
         body_matcher = JsonMatcher(self, {'task': 'testname',
                                           'args': ['one', 'two'],
@@ -238,7 +239,7 @@ class TestWorkerApplication(unittest.TestCase):
         app = WorkerApplication()
         app.declare_taskgroup('testgroup', 'testexchange', 'testroutingkey')
         app.tasks = MagicMock()
-        app.declare_task('testgroup', 'taskname')
+        app.declare_task('taskname', 'testgroup')
         app.tasks._declare.assert_called_with('taskname',
                                               exchange='testexchange',
                                               routing_key='testroutingkey')
@@ -274,4 +275,4 @@ class TestWorkerApplication(unittest.TestCase):
         app.register_module(mod, 't_')
         app.register_task.assert_any_call(mod.func1, 't_func1', None)
         app.register_task.assert_any_call(mod.func2, 't_func2', None)
-        app.declare_task.assert_called_with('testgroup', 'testtask')
+        app.declare_task.assert_called_with('testtask', 'testgroup')

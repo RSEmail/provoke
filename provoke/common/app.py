@@ -43,7 +43,7 @@ producers and executors see the task system.
       :rtype: :class:`AsyncResult`
 
    .. method:: apply_async(args, kwargs=None, correlation_id=None,
-                           routing_key=None, **log_extra)
+                           routing_key=None, send_result=False, **log_extra)
 
       Triggers the asynchronous execution of a task by a separate worker
       process. Tasks will be executed in the order they are triggered, so a
@@ -59,11 +59,14 @@ producers and executors see the task system.
       :param routing_key: Override the default AMQP routing key for the task
                           with the given string.
       :type routing_key: str
+      :param send_result: Create a temporary result queue and request that the
+                          worker publish the task's result to it.
+      :type send_result: bool
       :param log_extra: Additional information passed in to the log message
                         indicating the task was queued.
       :type log_extra: keyword arguments
-      :returns: A way to retrieve the result of the task's execution when it
-                is ready.
+      :returns: If ``send_result`` is True, used retrieve the result of the
+                task's execution when it is ready. Otherwise, returns ``None``.
       :rtype: :class:`AsyncResult`
 
    .. method:: apply(args, kwargs=None, correlation_id=None)
@@ -108,7 +111,7 @@ import amqp
 from .amqp import AmqpConnection
 from .logging import log_info, log_debug
 
-__all__ = ['WorkerApplication']
+__all__ = ['WorkerApplication', 'taskgroup']
 
 
 class AsyncResult(object):
@@ -279,32 +282,32 @@ class _TaskCaller(object):
         self.func = func
         self.name = name
         self.app = app
-        self.exchange = exchange
+        self.exchange = exchange or ''
         if routing_key is None:
             self.routing_key = name
         else:
             self.routing_key = routing_key
-        self.send_result = getattr(func, '_send_result', False)
 
     def delay(self, *args, **kwargs):
         return self.apply_async(args, kwargs)
 
     def apply_async(self, args, kwargs=None, correlation_id=None,
-                    routing_key=None,  **log_extra):
+                    routing_key=None, send_result=False, **log_extra):
         if correlation_id is None:
             correlation_id = str(uuid4())
         job = {'task': self.name,
                'args': args,
                'kwargs': kwargs}
         job_raw = json.dumps(job)
+        reply_to = correlation_id if send_result else None
         msg = amqp.Message(job_raw,
                            content_type='application/json',
-                           reply_to=(self.send_result and correlation_id),
+                           reply_to=reply_to,
                            correlation_id=correlation_id)
         if routing_key is None:
             routing_key = self.routing_key
         with AmqpConnection() as channel:
-            if self.send_result:
+            if send_result:
                 args = {'x-expires': self.app.result_queue_ttl}
                 channel.queue_declare(queue=correlation_id,
                                       auto_delete=False,
@@ -317,7 +320,7 @@ class _TaskCaller(object):
         log_debug('Task details', logger='tasks',
                   id=correlation_id,
                   name=self.name, args=args, kwargs=kwargs)
-        if self.send_result:
+        if send_result:
             return AsyncResult(correlation_id)
 
     def apply(self, args, kwargs=None, correlation_id=None):
@@ -385,22 +388,6 @@ def taskgroup(name):
     return deco
 
 
-def send_results(func):
-    """Function decorator indicating that when this task is executed, its
-    return value (or raised exception) will be available in the
-    :class:`AsyncResult` object returned by :meth:`~_TaskCaller.apply_async`.
-
-    Behind the scenes, the :meth:`~_TaskCaller.apply_async` method will
-    register a reply queue that will be sent along with the task message. When
-    the worker finishes the task and sees that it has a reply queue, it will
-    serialize the result and put it in the queue. The :meth:`AsyncResult.get`
-    will attempt to retrive that result from the reply queue.
-
-    """
-    func._send_results = True
-    return func
-
-
 class WorkerApplication(object):
     """Defines an application that has a set of tasks that may be executed
     asynchronously by worker processes.
@@ -412,7 +399,7 @@ class WorkerApplication(object):
 
     """
 
-    _taskgroups = {}
+    _taskgroups = {None: {'exchange': '', 'routing_key': None}}
 
     def __init__(self, result_queue_ttl=7200000):
         super(WorkerApplication, self).__init__()
@@ -432,7 +419,7 @@ class WorkerApplication(object):
     @classmethod
     def reset_taskgroups(cls):
         """Removes all known taskgroups."""
-        cls._taskgroups = {}
+        cls._taskgroups = {None: {'exchange': '', 'routing_key': None}}
 
     @classmethod
     def declare_taskgroup(cls, name, exchange='', routing_key=None):
@@ -456,17 +443,18 @@ class WorkerApplication(object):
         cls._taskgroups[name] = {'exchange': exchange,
                                  'routing_key': routing_key}
 
-    def declare_task(self, taskgroup, name):
+    def declare_task(self, name, taskgroup=None):
         """Declares a task without providing its implementation function. This
         may be used by client applications that know a task exists and how to
         use it, but do not have (or need) access to the task function itself.
 
-        :param taskgroup: The taskgroup to use for routing the task messages.
-                          Must have been previously declared with
-                          :meth:`.declare_taskgroup`.
-        :type taskgroup: str
         :param name: The full name of the task.
         :type name: str
+        :param taskgroup: The taskgroup to use for routing the task messages.
+                          Must have been previously declared with
+                          :meth:`.declare_taskgroup`. Default taskgroup uses
+                          exchange ``''`` and the task name as the routing key.
+        :type taskgroup: str
 
         """
         tg_info = self._taskgroups[taskgroup]
@@ -499,7 +487,7 @@ class WorkerApplication(object):
         """Convenience method for bulk registering tasks in a module.
 
         The module may use a special attribute named ``__declare_tasks__`` to
-        specify a list of ``(taskgroup, name)`` tuples, each tuple is passed
+        specify a list of ``(name, taskgroup)`` tuples, each tuple is passed
         into a call to :meth:`.declare_task`.
 
         :param mod: The module object to register tasks from.
@@ -521,4 +509,4 @@ class WorkerApplication(object):
             func_name = prefix + func.__name__
             self.register_task(func, func_name, taskgroup)
         for taskgroup, name in getattr(mod, '__declare_tasks__', []):
-            self.declare_task(taskgroup, name)
+            self.declare_task(name, taskgroup)
