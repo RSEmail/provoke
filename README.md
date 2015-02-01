@@ -1,11 +1,15 @@
 provoke
 =======
 
-Foundation for building a web API for calling Python functions asynchronously.
+Lightweight, asynchronous function execution in Python using AMQP.
 
-## API Usage
+## Installation
 
-## Worker Usage
+```
+sudo pip install provoke
+```
+
+## Usage
 
 The `provoke-worker` script manages a set of processes, each capable of
 pulling task messages from an AMQP queue and executing them. The script uses
