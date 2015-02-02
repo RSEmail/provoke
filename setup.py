@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 
 
 setup(name='provoke',
-      version='0.2.1',
+      version='0.2.2',
       author='Ian Good',
       author_email='ian.good@rackspace.com',
       description='Lightweight, asynchronous function execution in Python '
