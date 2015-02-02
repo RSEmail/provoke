@@ -32,7 +32,7 @@ from __future__ import absolute_import
 import os
 import time
 import json
-import cPickle
+from six.moves import cPickle
 import errno
 import signal
 import traceback

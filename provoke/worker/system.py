@@ -75,11 +75,11 @@ def redirect_stdio(stdout=None, stderr=None, stdin=None):
 
     # Set permissions as necessary.
     if stdin:
-        os.fchmod(si.fileno(), 0600)
+        os.fchmod(si.fileno(), 0o600)
     if stdout:
-        os.fchmod(so.fileno(), 0600)
+        os.fchmod(so.fileno(), 0o600)
     if stderr:
-        os.fchmod(se.fileno(), 0600)
+        os.fchmod(se.fileno(), 0o600)
 
 
 def drop_privileges(user=None, group=None, mask=None):

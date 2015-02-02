@@ -100,7 +100,7 @@ from __future__ import absolute_import
 
 import time
 import json
-import cPickle
+from six.moves import cPickle
 import errno
 from uuid import uuid4
 from socket import timeout as socket_timeout, error as socket_error

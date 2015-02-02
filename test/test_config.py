@@ -1,9 +1,12 @@
 
 import unittest
 import resource
-from ConfigParser import NoOptionError
+from six.moves.configparser import NoOptionError
 
-from mock import patch, MagicMock
+try:
+    from mock import patch, MagicMock
+except ImportError:
+    from unittest.mock import patch, MagicMock
 
 from provoke.config import Configuration
 from provoke.app import WorkerApplication
@@ -87,10 +90,10 @@ class TestConfiguration(unittest.TestCase):
         set_mock.assert_called_with(
             'test',
             user='testuser',
-            passwd='testpass',
+            password='testpass',
             host='testhost',
             port=3306,
-            db='testdb',
+            database='testdb',
             charset='testcharset',
             connect_timeout=10)
 

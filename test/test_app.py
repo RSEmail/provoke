@@ -5,7 +5,10 @@ import json
 from socket import timeout as socket_timeout
 from multiprocessing import TimeoutError
 
-from mock import patch, MagicMock, ANY
+try:
+    from mock import patch, MagicMock, ANY
+except ImportError:
+    from unittest.mock import patch, MagicMock, ANY
 import amqp
 
 from provoke.amqp import AmqpConnection

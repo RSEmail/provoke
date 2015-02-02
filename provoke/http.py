@@ -28,7 +28,7 @@ configured, and a context manager to ensure connections are closed after use.
 
 from __future__ import absolute_import
 
-import httplib
+from six.moves import http_client
 import base64
 
 __all__ = ['HttpConnection']
@@ -36,7 +36,7 @@ __all__ = ['HttpConnection']
 
 class HttpConnection(object):
     """Defines the context manager for connecting to an HTTP endpoint and
-    cleaning up afterwards. The resulting connection is a :py:mod:`httplib`
+    cleaning up afterwards. The resulting connection is a :py:mod:`http_client`
     object. For example::
 
         with HttpConnection('example-endpoint') as conn, headers:
@@ -70,8 +70,8 @@ class HttpConnection(object):
         :type name: str
         :param params: The HTTP endpoint parameters. The boolean keyword
                        ``ssl`` determines whether the rest of the keywords will
-                       be passed into :py:class:`httplib.HTTPConnection` or
-                       :py:class:`httplib.HTTPSConnection`. The keywords
+                       be passed into :py:class:`http_client.HTTPConnection` or
+                       :py:class:`http_client.HTTPSConnection`. The keywords
                        ``user`` and ``password`` will be used to construct a
                        Basic *Authorization* header.
         :type params: Keyword arguments
@@ -84,13 +84,14 @@ class HttpConnection(object):
         password = params.pop('password', None)
         host = params.pop('host', 'localhost')
         if params.pop('ssl', False):
-            conn = httplib.HTTPSConnection(host, **params)
+            conn = http_client.HTTPSConnection(host, **params)
         else:
-            conn = httplib.HTTPConnection(host, **params)
+            conn = http_client.HTTPConnection(host, **params)
         headers = {}
         if user is not None:
-            auth = base64.b64encode('{0}:{1}'.format(user, password))
-            headers['Authorization'] = 'Basic {0}'.format(auth)
+            auth = '{0}:{1}'.format(user, password).encode('utf-8')
+            auth_raw = base64.b64encode(auth)
+            headers['Authorization'] = b'Basic ' + auth_raw
         return conn, headers
 
     def __enter__(self):

@@ -31,7 +31,7 @@ from __future__ import absolute_import
 import re
 import resource
 from ast import literal_eval
-from ConfigParser import NoOptionError, NoSectionError
+from six.moves.configparser import NoOptionError, NoSectionError
 
 __all__ = ['Configuration']
 
@@ -90,11 +90,10 @@ class Configuration(object):
                 db_name = section[len(section_prefix):]
                 params = {}
                 self._from_config(params, section, 'user')
-                self._from_config(params, section, 'password',
-                                  dict_key='passwd')
+                self._from_config(params, section, 'password')
                 self._from_config(params, section, 'host')
                 self._from_config(params, section, 'port', opt_type='int')
-                self._from_config(params, section, 'database', dict_key='db')
+                self._from_config(params, section, 'database')
                 self._from_config(params, section, 'charset')
                 self._from_config(params, section, 'unix_socket')
                 self._from_config(params, section, 'connect_timeout',

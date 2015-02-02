@@ -1,8 +1,11 @@
 
 import unittest
 
-from mock import patch, MagicMock
-import httplib
+try:
+    from mock import patch, MagicMock
+except ImportError:
+    from unittest.mock import patch, MagicMock
+from six.moves import http_client
 
 from provoke.http import HttpConnection
 
@@ -29,7 +32,7 @@ class TestHttpConnection(unittest.TestCase):
                                    'ssl': True}},
                          HttpConnection._connection_params)
 
-    @patch.object(httplib, 'HTTPConnection')
+    @patch.object(http_client, 'HTTPConnection')
     def test_successful(self, conn_class_mock):
         conn_class_mock.return_value = conn_mock = MagicMock()
         with HttpConnection('test') as (conn, headers):
@@ -37,7 +40,7 @@ class TestHttpConnection(unittest.TestCase):
         conn_class_mock.assert_called_with('localhost')
         conn_mock.close.assert_called_with()
 
-    @patch.object(httplib, 'HTTPSConnection')
+    @patch.object(http_client, 'HTTPSConnection')
     def test_successful_ssl(self, conn_class_mock):
         HttpConnection.set_connection_params('test', ssl=True)
         conn_class_mock.return_value = conn_mock = MagicMock()
@@ -46,7 +49,7 @@ class TestHttpConnection(unittest.TestCase):
         conn_class_mock.assert_called_with('localhost')
         conn_mock.close.assert_called_with()
 
-    @patch.object(httplib, 'HTTPConnection')
+    @patch.object(http_client, 'HTTPConnection')
     def test_successful_auth(self, conn_class_mock):
         HttpConnection.set_connection_params('test',
                                              user='testuser',
@@ -54,12 +57,12 @@ class TestHttpConnection(unittest.TestCase):
         conn_class_mock.return_value = conn_mock = MagicMock()
         with HttpConnection('test') as (conn, headers):
             self.assertEqual(conn_mock, conn)
-            expected_hdrs = {'Authorization': 'Basic dGVzdHVzZXI6dGVzdHBhc3M='}
-            self.assertEqual(expected_hdrs, headers)
+            expected = {'Authorization': b'Basic dGVzdHVzZXI6dGVzdHBhc3M='}
+            self.assertEqual(expected, headers)
         conn_class_mock.assert_called_with('localhost')
         conn_mock.close.assert_called_with()
 
-    @patch.object(httplib, 'HTTPConnection')
+    @patch.object(http_client, 'HTTPConnection')
     def test_exception_raised(self, conn_class_mock):
         conn_class_mock.return_value = conn_mock = MagicMock()
         try:
@@ -73,7 +76,7 @@ class TestHttpConnection(unittest.TestCase):
         conn_class_mock.assert_called_with('localhost')
         conn_mock.close.assert_called_with()
 
-    @patch.object(httplib, 'HTTPConnection')
+    @patch.object(http_client, 'HTTPConnection')
     def test_close_exception(self, conn_class_mock):
         conn_class_mock.return_value = conn_mock = MagicMock()
         conn_mock.close.side_effect = ValueError('close failure')
@@ -87,7 +90,7 @@ class TestHttpConnection(unittest.TestCase):
         conn_class_mock.assert_called_with('localhost')
         conn_mock.close.assert_called_with()
 
-    @patch.object(httplib, 'HTTPConnection')
+    @patch.object(http_client, 'HTTPConnection')
     def test_disconnect_exception(self, conn_class_mock):
         conn_class_mock.return_value = conn_mock = MagicMock()
         conn_mock.disconnect.side_effect = ValueError('disconnect failure')

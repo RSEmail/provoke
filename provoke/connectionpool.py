@@ -33,7 +33,7 @@ in a thread-safe manner.
 from __future__ import absolute_import
 
 import os
-from Queue import Queue, Empty, Full
+from six.moves.queue import Queue, Empty, Full
 
 __all__ = ['ConnectionPool']
 

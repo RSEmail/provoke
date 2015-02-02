@@ -4,7 +4,10 @@ import sys
 import logging
 import logging.handlers
 
-from mock import patch, MagicMock, ANY
+try:
+    from mock import patch, MagicMock, ANY
+except ImportError:
+    from unittest.mock import patch, MagicMock, ANY
 
 from provoke.logging import setup_logging, \
     log_exception, log_debug, log_info, log_warning, log_error

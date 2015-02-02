@@ -32,7 +32,7 @@ import sys
 import signal
 import resource
 from optparse import OptionParser
-from ConfigParser import SafeConfigParser
+from six.moves.configparser import SafeConfigParser
 
 from ..config import Configuration
 from .. import import_attr

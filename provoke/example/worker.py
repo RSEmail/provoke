@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import os
 
 from provoke.amqp import AmqpConnection
@@ -7,9 +9,9 @@ from provoke.worker import WorkerMaster
 
 def do_work(*args):
     result = ' '.join(args)
-    print '===> PID {0}: doing work!'.format(os.getpid())
-    print 'Result:', result
-    print '===> PID {0}: done!'.format(os.getpid())
+    print('===> PID {0}: doing work!'.format(os.getpid()))
+    print('Result:', result)
+    print('===> PID {0}: done!'.format(os.getpid()))
     return result
 
 

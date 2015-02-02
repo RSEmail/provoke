@@ -50,8 +50,8 @@ from __future__ import absolute_import
 
 import MySQLdb
 
-from .connectionpool import ConnectionPool
-from .logging import log_debug
+from ..connectionpool import ConnectionPool
+from ..logging import log_debug
 
 __all__ = ['MySQLConnection']
 
@@ -60,8 +60,11 @@ class _MySQLContext(object):
 
     def __init__(self, **params):
         super(_MySQLContext, self).__init__()
+        if 'password' in params:
+            params['passwd'] = params.pop('password')
+        if 'database' in params:
+            params['db'] = params.pop('database')
         self.conn = MySQLdb.connect(**params)
-        self.params = params
         self.module = MySQLdb
         self._set_session_vars()
         host = params.get('host', 'localhost')

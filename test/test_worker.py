@@ -10,7 +10,10 @@ from socket import timeout as socket_timeout
 
 from amqp.exceptions import AccessRefused
 
-from mock import patch, MagicMock, ANY
+try:
+    from mock import patch, MagicMock, ANY
+except ImportError:
+    from unittest.mock import patch, MagicMock, ANY
 
 from provoke.amqp import AmqpConnection
 from provoke.worker import _WorkerProcess, WorkerMaster, \
