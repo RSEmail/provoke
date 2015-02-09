@@ -94,6 +94,25 @@ class TestAsyncResult(unittest.TestCase):
 
     @patch.object(AmqpConnection, '__enter__')
     @patch.object(AmqpConnection, '__exit__')
+    @patch.object(AsyncResult, '_on_message')
+    def test_get_nonblock(self, on_msg_mock, exit_mock, enter_mock):
+        enter_mock.return_value = channel = MagicMock()
+        exit_mock.return_value = None
+        channel.basic_get.return_value = msg = MagicMock()
+        res = AsyncResult('test')
+
+        def finish(timeout):
+            res._result = True
+            res._return = 123
+        on_msg_mock.side_effect = finish
+        self.assertEqual(123, res.get(0.0))
+        exit_mock.assert_called_with(None, None, None)
+        on_msg_mock.assert_called_with(msg)
+        channel.basic_get.assert_called_with(queue='test', no_ack=True)
+        channel.queue_delete.assert_called_with('test')
+
+    @patch.object(AmqpConnection, '__enter__')
+    @patch.object(AmqpConnection, '__exit__')
     def test_get_keyerror(self, exit_mock, enter_mock):
         enter_mock.return_value = channel = MagicMock()
         exit_mock.return_value = None

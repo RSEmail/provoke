@@ -196,19 +196,19 @@ class AsyncResult(object):
             exception_raw = res['exception']['value'].encode('ascii')
             self._exc = cPickle.loads(exception_raw)
 
-    def get(self, timeout=None):
-        """Returns the task result when it becomes available. If the result was
-        an exception, the exception is re-raised by this method.
+    def _check(self):
+        with AmqpConnection() as channel:
+            try:
+                msg = channel.basic_get(queue=self.correlation_id, no_ack=True)
+            except amqp.exceptions.NotFound:
+                raise KeyError(self.correlation_id)
+            if msg:
+                self._on_message(msg)
+                channel.queue_delete(self.correlation_id)
+                return self._get_cached_result()
+        raise TimeoutError(0.0)
 
-        :param timeout: If this many seconds elapse before the result is ready,
-                        this method will stop and return ``None``. The default
-                        is to wait indefinitely.
-        :type timeout: float
-        :raises: :py:exc:`~multiprocessing.TimeoutError`
-
-        """
-        if hasattr(self, '_result'):
-            return self._get_cached_result()
+    def _wait(self, timeout):
         start_time = time.time()
         with AmqpConnection() as channel:
             try:
@@ -235,6 +235,24 @@ class AsyncResult(object):
                 if timeout is not None and remaining <= 0.0:
                     break
         raise TimeoutError(timeout)
+
+    def get(self, timeout=None):
+        """Returns the task result when it becomes available. If the result was
+        an exception, the exception is re-raised by this method.
+
+        :param timeout: If this many seconds elapse before the result is ready,
+                        this method will stop and return ``None``. The default
+                        is to wait indefinitely.
+        :type timeout: float
+        :raises: :py:exc:`~multiprocessing.TimeoutError`
+
+        """
+        if hasattr(self, '_result'):
+            return self._get_cached_result()
+        if timeout == 0.0:
+            return self._check()
+        else:
+            return self._wait(timeout)
 
     def wait(self, timeout=None):
         """Waits for the task result to become available. It does not return
