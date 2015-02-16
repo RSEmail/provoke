@@ -130,6 +130,11 @@ class AsyncResult(object):
         self.correlation_id = correlation_id
 
     @property
+    def result_queue(self):
+        """The name of the queue where results will be published."""
+        return 'result_{0}'.format(self.correlation_id)
+
+    @property
     def args(self):
         """If the result is available, these will be a tuple of the original
         positional and keyword arguments sent with the request.
@@ -199,12 +204,12 @@ class AsyncResult(object):
     def _check(self):
         with AmqpConnection() as channel:
             try:
-                msg = channel.basic_get(queue=self.correlation_id, no_ack=True)
+                msg = channel.basic_get(queue=self.result_queue, no_ack=True)
             except amqp.exceptions.NotFound:
-                raise KeyError(self.correlation_id)
+                raise KeyError(self.result_queue)
             if msg:
                 self._on_message(msg)
-                channel.queue_delete(self.correlation_id)
+                channel.queue_delete(self.result_queue)
                 return self._get_cached_result()
         raise TimeoutError(0.0)
 
@@ -212,10 +217,10 @@ class AsyncResult(object):
         start_time = time.time()
         with AmqpConnection() as channel:
             try:
-                channel.basic_consume(queue=self.correlation_id,
+                channel.basic_consume(queue=self.result_queue,
                                       no_ack=True, callback=self._on_message)
             except amqp.exceptions.NotFound:
-                raise KeyError(self.correlation_id)
+                raise KeyError(self.result_queue)
             while channel.callbacks:
                 elapsed = time.time() - start_time
                 cur_timeout = 10.0
@@ -230,7 +235,7 @@ class AsyncResult(object):
                     if exc.errno != errno.EAGAIN:
                         raise
                 if hasattr(self, '_result'):
-                    channel.queue_delete(self.correlation_id)
+                    channel.queue_delete(self.result_queue)
                     return self._get_cached_result()
                 if timeout is not None and remaining <= 0.0:
                     break
@@ -317,7 +322,8 @@ class _TaskCaller(object):
                'args': args,
                'kwargs': kwargs}
         job_raw = json.dumps(job)
-        reply_to = correlation_id if send_result else None
+        result = AsyncResult(correlation_id)
+        reply_to = result.result_queue if send_result else None
         msg = amqp.Message(job_raw,
                            content_type='application/json',
                            reply_to=reply_to,
@@ -326,10 +332,8 @@ class _TaskCaller(object):
             routing_key = self.routing_key
         with AmqpConnection() as channel:
             if send_result:
-                args = {'x-expires': self.app.result_queue_ttl}
-                channel.queue_declare(queue=correlation_id,
-                                      auto_delete=False,
-                                      arguments=args)
+                channel.queue_declare(queue=reply_to,
+                                      auto_delete=False)
             channel.basic_publish(msg, exchange=self.exchange,
                                   routing_key=routing_key)
         log_info('Task queued', logger='tasks',
@@ -339,7 +343,7 @@ class _TaskCaller(object):
                   id=correlation_id,
                   name=self.name, args=args, kwargs=kwargs)
         if send_result:
-            return AsyncResult(correlation_id)
+            return result
 
     def apply(self, args, kwargs=None, correlation_id=None):
         log_info('Task starting', logger='tasks',
@@ -410,18 +414,12 @@ class WorkerApplication(object):
     """Defines an application that has a set of tasks that may be executed
     asynchronously by worker processes.
 
-    :param result_queue_ttl: For tasks that provide results, this is the
-                             timeout in milliseconds before the result queue
-                             expires and is deleted. Default is two hours.
-    :type result_queue_ttl: int
-
     """
 
     _taskgroups = {None: {'exchange': '', 'routing_key': None}}
 
-    def __init__(self, result_queue_ttl=7200000):
+    def __init__(self):
         super(WorkerApplication, self).__init__()
-        self.result_queue_ttl = result_queue_ttl
 
         #: This attribute should be used by clients to call tasks by name. For
         #: example, to call a task registered as ``'do_stuff'``::

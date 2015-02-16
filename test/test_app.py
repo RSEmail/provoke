@@ -86,10 +86,10 @@ class TestAsyncResult(unittest.TestCase):
         channel.connection.drain_events.side_effect = finish
         self.assertEqual(123, res.get())
         exit_mock.assert_called_with(None, None, None)
-        channel.basic_consume.assert_called_with(queue='test', no_ack=True,
-                                                 callback=ANY)
+        channel.basic_consume.assert_called_with(queue='result_test',
+                                                 no_ack=True, callback=ANY)
         channel.connection.drain_events.assert_called_with(timeout=10.0)
-        channel.queue_delete.assert_called_with('test')
+        channel.queue_delete.assert_called_with('result_test')
         self.assertFalse(channel.connection.send_heartbeat.called)
 
     @patch.object(AmqpConnection, '__enter__')
@@ -108,8 +108,8 @@ class TestAsyncResult(unittest.TestCase):
         self.assertEqual(123, res.get(0.0))
         exit_mock.assert_called_with(None, None, None)
         on_msg_mock.assert_called_with(msg)
-        channel.basic_get.assert_called_with(queue='test', no_ack=True)
-        channel.queue_delete.assert_called_with('test')
+        channel.basic_get.assert_called_with(queue='result_test', no_ack=True)
+        channel.queue_delete.assert_called_with('result_test')
 
     @patch.object(AmqpConnection, '__enter__')
     @patch.object(AmqpConnection, '__exit__')
@@ -119,8 +119,8 @@ class TestAsyncResult(unittest.TestCase):
         channel.basic_consume.side_effect = amqp.exceptions.NotFound
         res = AsyncResult('test')
         self.assertRaises(KeyError, res.get)
-        channel.basic_consume.assert_called_with(queue='test', no_ack=True,
-                                                 callback=ANY)
+        channel.basic_consume.assert_called_with(queue='result_test',
+                                                 no_ack=True, callback=ANY)
         self.assertFalse(channel.connection.drain_events.called)
         self.assertFalse(channel.queue_delete.called)
         self.assertFalse(channel.connection.send_heartbeat.called)
@@ -134,8 +134,8 @@ class TestAsyncResult(unittest.TestCase):
         channel.connection.drain_events.side_effect = socket_timeout
         res = AsyncResult('test')
         self.assertRaises(TimeoutError, res.get, 10.0)
-        channel.basic_consume.assert_called_with(queue='test', no_ack=True,
-                                                 callback=ANY)
+        channel.basic_consume.assert_called_with(queue='result_test',
+                                                 no_ack=True, callback=ANY)
         channel.connection.drain_events.assert_called_with(timeout=0.0)
         channel.connection.send_heartbeat.assert_called_with()
 
