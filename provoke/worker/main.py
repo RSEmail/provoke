@@ -21,22 +21,33 @@
 # SOFTWARE.
 #
 
-"""Implements a possible entrypoint for instantiating a worker service that
-reads necessary information from configuration.
+"""Loads plugins defining worker processes and task functions. Starts and
+manages the pool of worker processes to execute tasks as the come in.
 
 """
 
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function
 
 import sys
+import time
+import logging
 import signal
 import resource
 from optparse import OptionParser
+
+from pkg_resources import iter_entry_points
 from six.moves.configparser import SafeConfigParser
 
 from ..config import Configuration
-from .. import import_attr
-from . import system
+from ..app import WorkerApplication
+from . import system, WorkerMaster
+
+
+logger = logging.getLogger('provoke.main')
+
+
+class BadPlugin(Exception):
+    pass
 
 
 class ReloadSignal(Exception):
@@ -53,48 +64,40 @@ def handle_signals():
     signal.signal(signal.SIGHUP, reload_sig)
 
 
-def start_master():
-    parser = OptionParser()
-    parser.add_option('--config', action='append',
-                      help='Configuration file')
-    parser.add_option('--daemon', action='store_true', default=False,
-                      help='Daemonize the master process.')
-    parser.add_option('--worker-master', metavar='WHERE',
-                      help='Attempt to load the worker master from WHERE, '
-                      'e.g. someapp.worker:master')
-
-    options, extra = parser.parse_args()
-
+def start_master(options, plugins):
     cfgparser = SafeConfigParser()
-    try:
-        if not cfgparser.read(options.config):
-            raise TypeError
-    except TypeError:
-        pass
-
+    cfgparser.read(options.config)
     cfg = Configuration(cfgparser)
-    cfg.configure_taskgroups()
-    cfg.configure_amqp()
-    cfg.configure_mysql()
-
-    try:
-        what = options.worker_master or cfg.get_worker_master()
-        master = import_attr(what, 'master')
-    except (ImportError, AttributeError, ValueError):
-        parser.error('Could not find importable worker master.')
 
     pidfile = None
     user, group, umask = None, None, None
 
     def process_init():
         system.drop_privileges(user, group, umask)
+        time.sleep(0.1)
 
-    master._internal_process_callback = process_init
+    app = WorkerApplication()
+    master = WorkerMaster(app, process_callback=process_init)
+
+    cfg.configure_logging()
+    cfg.configure_taskgroups()
+    cfg.configure_amqp()
+    cfg.configure_mysql()
+
+    for plugin in plugins:
+        for entry_point in iter_entry_points('provoke.workers', plugin):
+            logger.debug('Loading plugin: name=%s', entry_point.name)
+            register = entry_point.load()
+            register(app, master, cfg)
+            break
+        else:
+            raise BadPlugin(plugin)
 
     for res, limits in cfg.get_rlimits():
         resource.setrlimit(res, limits)
 
     if options.daemon:
+        logger.debug('Daemonizing master process')
         pidfile = cfg.get_pidfile()
         stdout, stderr, stdin = cfg.get_stdio_redirects()
         user, group, umask = cfg.get_worker_privileges()
@@ -110,9 +113,29 @@ def start_master():
 
 
 def main():
+    usage = 'Usage: %prog [options] <plugins>'
+    parser = OptionParser(description=__doc__, usage=usage)
+    parser.add_option('--config', action='append', metavar='PATH', default=[],
+                      help='Configuration file')
+    parser.add_option('--daemon', action='store_true', default=False,
+                      help='Daemonize the master process')
+    parser.add_option('-l', '--list-plugins', action='store_true',
+                      default=False, help='List all known plugins')
+
+    options, plugins = parser.parse_args()
+
+    if options.list_plugins:
+        for entry_point in iter_entry_points('provoke.workers'):
+            print(entry_point.name)
+        return
+    elif not plugins:
+        parser.error('One or more plugins required')
+
     while True:
         try:
-            start_master()
+            start_master(options, plugins)
+        except BadPlugin as exc:
+            parser.error('Unrecognized plugin name: ' + str(exc))
         except ReloadSignal:
             pass
         except (SystemExit, KeyboardInterrupt):

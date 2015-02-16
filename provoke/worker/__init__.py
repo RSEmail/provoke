@@ -32,18 +32,18 @@ from __future__ import absolute_import
 import os
 import time
 import json
-from six.moves import cPickle
+import logging
 import errno
 import signal
 import traceback
 from socket import timeout as socket_timeout
 from functools import partial
 
+from six.moves import cPickle
 import amqp
 from amqp.exceptions import AccessRefused
 
 from ..amqp import AmqpConnection
-from ..logging import log_debug, log_info, log_exception
 
 __all__ = ['WorkerMaster', 'DiscardTask', 'RequeueTask',
            'get_worker_data', 'get_worker_app']
@@ -51,6 +51,8 @@ __all__ = ['WorkerMaster', 'DiscardTask', 'RequeueTask',
 
 _current_worker_data = None
 _current_worker_app = None
+
+logger = logging.getLogger('provoke.worker')
 
 
 def get_worker_data(key, default=None):
@@ -199,8 +201,7 @@ class _WorkerProcess(object):
                                       consumer_tag=queue_name,
                                       callback=callback,
                                       exclusive=self.exclusive)
-            log_info('Accepting jobs', logger='worker.master',
-                     queues=self.queues)
+            logger.info('Accepting jobs: queues=%s', repr(self.queues))
             while channel.callbacks:
                 try:
                     channel.connection.drain_events(timeout=10.0)
@@ -212,9 +213,9 @@ class _WorkerProcess(object):
             try:
                 self._consume()
                 return
-            except AccessRefused as exc:
-                log_debug('Queue access refused', logger='worker.master',
-                          message=str(exc))
+            except AccessRefused:
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.exception('Queue access refused')
                 time.sleep(5.0)
 
     def _run(self):
@@ -223,7 +224,7 @@ class _WorkerProcess(object):
         except (SystemExit, KeyboardInterrupt):
             pass
         except Exception:
-            log_exception()
+            logger.exception('Unhandled exception in worker process')
             traceback.print_exc()
             raise
 
@@ -273,8 +274,8 @@ class WorkerMaster(object):
         self.workers = []
 
     def start_callback(self, worker):
-        log_info('Process started', logger='workers',
-                 pid=worker.pid, queues=worker.queues)
+        logger.info('Process started: pid=%s, queues=%s',
+                    worker.pid, repr(worker.queues))
         if self._start_callback:
             try:
                 self._start_callback(worker.queues, worker.pid)
@@ -282,9 +283,8 @@ class WorkerMaster(object):
                 pass
 
     def exit_callback(self, worker, status):
-        log_info('Process exited', logger='workers',
-                 pid=worker.pid, status=status,
-                 queues=worker.queues)
+        logger.info('Process exited: pid=%s, status=%s, queues=%s',
+                    worker.pid, status, repr(worker.queues))
         if self._exit_callback:
             try:
                 self._exit_callback(worker.queues, worker.pid, status)

@@ -43,7 +43,7 @@ producers and executors see the task system.
       :rtype: :class:`AsyncResult`
 
    .. method:: apply_async(args, kwargs=None, correlation_id=None,
-                           routing_key=None, send_result=False, **log_extra)
+                           routing_key=None, send_result=False)
 
       Triggers the asynchronous execution of a task by a separate worker
       process. Tasks will be executed in the order they are triggered, so a
@@ -62,9 +62,6 @@ producers and executors see the task system.
       :param send_result: Create a temporary result queue and request that the
                           worker publish the task's result to it.
       :type send_result: bool
-      :param log_extra: Additional information passed in to the log message
-                        indicating the task was queued.
-      :type log_extra: keyword arguments
       :returns: If ``send_result`` is True, used retrieve the result of the
                 task's execution when it is ready. Otherwise, returns ``None``.
       :rtype: :class:`AsyncResult`
@@ -100,18 +97,21 @@ from __future__ import absolute_import
 
 import time
 import json
-from six.moves import cPickle
 import errno
+import logging
 from uuid import uuid4
 from socket import timeout as socket_timeout, error as socket_error
 from multiprocessing import TimeoutError
 
+from six.moves import cPickle
 import amqp
 
 from .amqp import AmqpConnection
-from .logging import log_info, log_debug
 
 __all__ = ['WorkerApplication', 'taskgroup']
+
+
+logger = logging.getLogger('provoke.tasks')
 
 
 class AsyncResult(object):
@@ -315,7 +315,7 @@ class _TaskCaller(object):
         return self.apply_async(args, kwargs)
 
     def apply_async(self, args, kwargs=None, correlation_id=None,
-                    routing_key=None, send_result=False, **log_extra):
+                    routing_key=None, send_result=False):
         if correlation_id is None:
             correlation_id = str(uuid4())
         job = {'task': self.name,
@@ -336,29 +336,22 @@ class _TaskCaller(object):
                                       auto_delete=False)
             channel.basic_publish(msg, exchange=self.exchange,
                                   routing_key=routing_key)
-        log_info('Task queued', logger='tasks',
-                 id=correlation_id,
-                 name=self.name, **log_extra)
-        log_debug('Task details', logger='tasks',
-                  id=correlation_id,
-                  name=self.name, args=args, kwargs=kwargs)
+        logger.info('Task queued: name=%s, id=%s', self.name, correlation_id)
+        logger.debug('Task details: args=%s, kwargs=%s',
+                     repr(args), repr(kwargs))
         if send_result:
             return result
 
     def apply(self, args, kwargs=None, correlation_id=None):
-        log_info('Task starting', logger='tasks',
-                 id=correlation_id,
-                 name=self.name)
+        logger.info('Task starting: name=%s, id=%s', self.name, correlation_id)
         kwargs = kwargs or {}
         start_time = time.time()
         try:
             return self(*args, **kwargs)
         finally:
             elapsed = time.time() - start_time
-            log_info('Task finished', logger='tasks',
-                     id=correlation_id,
-                     name=self.name,
-                     elapsed=elapsed)
+            logger.info('Task finished: name=%s, id=%s, elapsed=%s',
+                        self.name, correlation_id, elapsed)
 
     def __call__(self, *args, **kwargs):
         return self.func(*args, **kwargs)

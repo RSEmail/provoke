@@ -12,16 +12,16 @@ sudo pip install provoke
 
 ## Usage
 
-The `provoke-worker` script manages a set of processes, each capable of
-pulling task messages from an AMQP queue and executing them. The script uses
-an external Python script, given in configuration or on the command-line, to
-load the information about processes and tasks.
+The `provoke-worker` script manages a set of processes, each capable of pulling
+task messages from an AMQP queue and executing them. The script uses an
+external Python script, installed as plugins, to load the information about
+processes and tasks.
 
 To try it out, you will need a basic RabbitMQ broker running on localhost. When
-you're ready, start up the provoke worker with the worker example:
+you're ready, start up the provoke worker with the worker example plugin:
 
 ```
-provoke-worker --worker-master provoke.example.worker
+provoke-worker example
 ```
 
 In another terminal, use the client example to send a task for execution:

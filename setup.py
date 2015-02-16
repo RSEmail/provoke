@@ -21,6 +21,6 @@ setup(name='provoke',
       extras_require={
           'mysql': [mysql],
       },
-      entry_points={'console_scripts': [
-          'provoke-worker = provoke.worker.main:main',
-      ]})
+      entry_points={
+          'provoke.workers': ['example = provoke.example.worker:register'],
+          'console_scripts': ['provoke-worker = provoke.worker.main:main']})

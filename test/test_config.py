@@ -1,12 +1,15 @@
 
 import unittest
+import sys
+import logging
+import logging.config
 import resource
 from six.moves.configparser import NoOptionError
 
 try:
-    from mock import patch, MagicMock
+    from mock import patch, MagicMock, ANY
 except ImportError:
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import patch, MagicMock, ANY
 
 from provoke.config import Configuration
 from provoke.app import WorkerApplication
@@ -70,6 +73,25 @@ class TestConfiguration(unittest.TestCase):
         cfg._from_config(ret, 'sec', 'one', opt_type='list')
         cfgparser.get.assert_called_with('sec', 'one')
         self.assertEqual(['one', 'two', 'three'], ret['one'])
+
+    @patch.object(logging, 'basicConfig')
+    def test_configure_logging(self, basicconfig_mock):
+        cfgparser = MagicMock()
+        cfg = Configuration(cfgparser)
+        cfgparser.get.side_effect = NoOptionError(None, None)
+        cfg.configure_logging()
+        cfgparser.get.assert_called_once_with('daemon', 'logging_config')
+        basicconfig_mock.assert_called_once_with(
+            stream=sys.stdout, format=ANY, level=ANY)
+
+    @patch.object(logging.config, 'fileConfig')
+    def test_configure_logging_file(self, fileconfig_mock):
+        cfgparser = MagicMock()
+        cfg = Configuration(cfgparser)
+        cfgparser.get.return_value = '/path/to/logging.conf'
+        cfg.configure_logging()
+        cfgparser.get.assert_called_once_with('daemon', 'logging_config')
+        fileconfig_mock.assert_called_once_with('/path/to/logging.conf')
 
     @patch.object(MySQLConnection, 'reset_connection_params')
     @patch.object(MySQLConnection, 'set_connection_params')

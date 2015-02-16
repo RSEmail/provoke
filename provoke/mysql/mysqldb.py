@@ -48,12 +48,16 @@ configured, and a context manager to ensure connections are closed after use.
 
 from __future__ import absolute_import
 
+import logging
+
 import MySQLdb
 
 from ..connectionpool import ConnectionPool
-from ..logging import log_debug
 
 __all__ = ['MySQLConnection']
+
+
+logger = logging.getLogger('provoke.mysql')
 
 
 class _MySQLContext(object):
@@ -68,10 +72,8 @@ class _MySQLContext(object):
         self.module = MySQLdb
         self._set_session_vars()
         host = params.get('host', 'localhost')
-        user = params.get('user')
         db = params.get('db')
-        log_debug('Connection established', logger='mysql',
-                  host=host, user=user, db=db)
+        logger.debug('Connection established: host=%s, db=%s', host, db)
 
     def _set_session_vars(self):
         cur = self.conn.cursor()

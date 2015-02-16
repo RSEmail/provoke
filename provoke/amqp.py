@@ -29,12 +29,16 @@ the context manager exits.
 
 from __future__ import absolute_import
 
+import logging
+
 import amqp
 
 from .connectionpool import ConnectionPool
-from .logging import log_debug
 
 __all__ = ['AmqpConnection']
+
+
+logger = logging.getLogger('provoke.amqp')
 
 
 class _PoolableAmqp(object):
@@ -43,10 +47,7 @@ class _PoolableAmqp(object):
         super(_PoolableAmqp, self).__init__()
         self.conn = amqp.Connection(**kwargs)
         host = kwargs.get('host', 'localhost')
-        user = kwargs.get('userid', 'guest')
-        vhost = kwargs.get('virtual_host', '/')
-        log_debug('Connection established', logger='amqp',
-                  host=host, user=user, vhost=vhost)
+        logger.debug('Connection established: host=%s', host)
 
     def check(self):
         try:

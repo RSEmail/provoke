@@ -28,7 +28,10 @@ a config file.
 
 from __future__ import absolute_import
 
+import sys
 import re
+import logging
+import logging.config
 import resource
 from ast import literal_eval
 from six.moves.configparser import NoOptionError, NoSectionError
@@ -70,6 +73,21 @@ class Configuration(object):
                 in_dict[dict_key] = config.get(section, name)
         except (NoOptionError, NoSectionError):
             pass
+
+    def configure_logging(self, section='daemon'):
+        """Looks for a logging config file and, if it finds one, configures
+        logging using :py:func:`logging.config.fileConfig`. Otherwise, uses
+        :py:func:`logging.basicConfig` to standard output.
+
+        """
+        try:
+            log_config = self._config.get(section, 'logging_config')
+        except (NoSectionError, NoOptionError):
+            format = '%(asctime)-26s %(levelname)-8s %(name)-14s %(message)s'
+            logging.basicConfig(stream=sys.stdout, format=format,
+                                level=logging.WARN)
+        else:
+            logging.config.fileConfig(log_config)
 
     def configure_mysql(self):
         """Searches for config sections prefixed with ``mysql:`` and loads them
@@ -178,12 +196,6 @@ class Configuration(object):
                     params['exchange'] = ''
                     params['routing_key'] = params.pop('queue')
                 WorkerApplication.declare_taskgroup(tg_name, **params)
-
-    def get_worker_master(self, section='daemon'):
-        try:
-            return self._config.get(section, 'master')
-        except (NoOptionError, NoSectionError):
-            pass
 
     def get_rlimits(self, section='daemon'):
         try:
