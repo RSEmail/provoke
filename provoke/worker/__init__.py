@@ -117,12 +117,13 @@ class RequeueTask(Exception):
 
 class _WorkerProcess(object):
 
-    def __init__(self, app, queues, limit, task_callback,
+    def __init__(self, app, queues, limit, process_callback, task_callback,
                  return_callback, exclusive):
         super(_WorkerProcess, self).__init__()
         self.app = app
         self.queues = queues
         self.limit = limit
+        self.process_callback = process_callback
         self.task_callback = task_callback
         self.return_callback = return_callback
         self.exclusive = exclusive
@@ -245,10 +246,8 @@ class WorkerMaster(object):
                           passed in the same arguments as ``start_callback``
                           plus the exit status integer.
     :type exit_callback: collections.Callable
-    :param process_callback: This function is called in new child processes
-                             before any tasks are executed. It is passed in a
-                             single list of queues that will be consumed in the
-                             new process.
+    :param process_callback: This function is called with no arguments in new
+                             child processes before any tasks are executed.
     :type process_callback: collections.Callable
     :param worker_data: Arbitrary data may be made available to workers with
                         this dictionary. Tasks running in worker processes may
@@ -265,7 +264,6 @@ class WorkerMaster(object):
         self._start_callback = start_callback
         self._exit_callback = exit_callback
         self._process_callback = process_callback
-        self._internal_process_callback = None
         self._worker_data = worker_data or {}
         self.workers = []
 
@@ -287,17 +285,15 @@ class WorkerMaster(object):
             except Exception:
                 pass
 
-    def process_callback(self, worker):
-        if self._internal_process_callback:
-            self._internal_process_callback()
+    def process_callbacks(self, worker):
         if self._process_callback:
-            try:
-                self._process_callback(worker.queues)
-            except Exception:
-                pass
+            self._process_callback()
+        if worker.process_callback:
+            worker.process_callback()
 
     def add_worker(self, app, queues, num_processes=1, task_limit=10,
-                   task_callback=None, return_callback=None, exclusive=False):
+                   process_callback=None, task_callback=None,
+                   return_callback=None, exclusive=False):
         """Adds a new worker process to be managed by the :meth:`.run` method.
 
         :param app: The application backend that knows how to enqueue and
@@ -313,6 +309,10 @@ class WorkerMaster(object):
                            before it exits and is replaced by a new worker
                            process.
         :type task_limit: int
+        :param process_callback: This function is called with no arguments in
+                                 new child processes before any tasks are
+                                 executed.
+        :type process_callback: collections.Callable
         :param task_callback: This function is called inside the child process
                               every time a task is ready for execution. This
                               function is given four arguments, the
@@ -336,8 +336,8 @@ class WorkerMaster(object):
 
         """
         for i in range(num_processes):
-            worker = _WorkerProcess(app, queues, task_limit, task_callback,
-                                    return_callback, exclusive)
+            worker = _WorkerProcess(app, queues, task_limit, process_callback,
+                                    task_callback, return_callback, exclusive)
             self.workers += [worker]
 
     def _check_workers(self):
@@ -364,7 +364,7 @@ class WorkerMaster(object):
             global _current_worker_data, _current_worker_app
             _current_worker_data = self._worker_data.copy()
             _current_worker_app = worker.app
-            self.process_callback(worker)
+            self.process_callbacks(worker)
             try:
                 worker._run()
             except Exception:
