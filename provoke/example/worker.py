@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import os
 
+from provoke.app import WorkerApplication
 from provoke.amqp import AmqpConnection
 
 
@@ -14,9 +15,10 @@ def do_work(*received):
     return result
 
 
-def register(app, master, config):
+def register(master, config):
     with AmqpConnection() as channel:
         channel.queue_declare('do_work')
 
+    app = WorkerApplication()
     app.register_task(do_work)
-    master.add_worker(['do_work'], num_processes=4)
+    master.add_worker(app, ['do_work'], num_processes=4)

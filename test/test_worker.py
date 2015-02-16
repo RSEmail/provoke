@@ -182,7 +182,7 @@ class TestWorkerMaster(unittest.TestCase):
     def test_start_callback(self):
         cb = MagicMock(side_effect=Exception)
         worker = MagicMock(queues='testqueues', pid='testpid')
-        master = WorkerMaster('testapp', start_callback=cb)
+        master = WorkerMaster(start_callback=cb)
         master.start_callback(worker)
         cb.assert_called_with('testqueues', 'testpid')
 
@@ -194,14 +194,14 @@ class TestWorkerMaster(unittest.TestCase):
         cb.assert_called_with('testqueues', 'testpid', 'teststatus')
 
     def test_add_worker(self):
-        master = WorkerMaster('testapp')
+        master = WorkerMaster()
         self.assertEqual([], master.workers)
-        master.add_worker(['queue1'], exclusive=True)
+        master.add_worker('testapp', ['queue1'], exclusive=True)
         self.assertEqual(1, len(master.workers))
         self.assertEqual('testapp', master.workers[0].app)
         self.assertEqual(['queue1'], master.workers[0].queues)
         self.assertEqual(None, master.workers[0].pid)
-        master.add_worker(['queue2'], num_processes=2)
+        master.add_worker('testapp', ['queue2'], num_processes=2)
         self.assertEqual(3, len(master.workers))
         self.assertEqual('testapp', master.workers[0].app)
         self.assertEqual(['queue1'], master.workers[0].queues)
@@ -303,7 +303,7 @@ class TestWorkerMaster(unittest.TestCase):
         start_cb = MagicMock()
         worker1 = MagicMock(queues='testqueues', pid='testpid1')
         worker2 = MagicMock(queues='testqueues', pid=None)
-        master = WorkerMaster('testapp', start_callback=start_cb)
+        master = WorkerMaster(start_callback=start_cb)
         master._start_worker = MagicMock(return_value='testpid2')
         master.workers = [worker1, worker2]
         master._restart_workers()

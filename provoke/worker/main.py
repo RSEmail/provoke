@@ -39,7 +39,6 @@ from pkg_resources import iter_entry_points
 from six.moves.configparser import SafeConfigParser
 
 from ..config import Configuration
-from ..app import WorkerApplication
 from . import system, WorkerMaster
 
 
@@ -76,8 +75,7 @@ def start_master(options, plugins):
         system.drop_privileges(user, group, umask)
         time.sleep(0.1)
 
-    app = WorkerApplication()
-    master = WorkerMaster(app, process_callback=process_init)
+    master = WorkerMaster(process_callback=process_init)
 
     cfg.configure_logging()
     cfg.configure_taskgroups()
@@ -88,7 +86,7 @@ def start_master(options, plugins):
         for entry_point in iter_entry_points('provoke.workers', plugin):
             logger.debug('Loading plugin: name=%s', entry_point.name)
             register = entry_point.load()
-            register(app, master, cfg)
+            register(master, cfgparser)
             break
         else:
             raise BadPlugin(plugin)

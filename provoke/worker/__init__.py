@@ -233,9 +233,6 @@ class WorkerMaster(object):
     """Manages child processes that execute application workers. These workers
     may be listening on one or many queues.
 
-    :param worker_app: The application backend that knows how to enqueue and
-                       execute tasks.
-    :type worker_app: :class:`~provoke.app.WorkerApplication`
     :param start_callback: This function is called in the master process every
                            time a new worker process is started. This callback
                            is given three parameters, the
@@ -262,10 +259,9 @@ class WorkerMaster(object):
 
     """
 
-    def __init__(self, worker_app, start_callback=None, exit_callback=None,
+    def __init__(self, start_callback=None, exit_callback=None,
                  process_callback=None, worker_data=None):
         super(WorkerMaster, self).__init__()
-        self.app = worker_app
         self._start_callback = start_callback
         self._exit_callback = exit_callback
         self._process_callback = process_callback
@@ -300,10 +296,13 @@ class WorkerMaster(object):
             except Exception:
                 pass
 
-    def add_worker(self, queues, num_processes=1, task_limit=10,
+    def add_worker(self, app, queues, num_processes=1, task_limit=10,
                    task_callback=None, return_callback=None, exclusive=False):
         """Adds a new worker process to be managed by the :meth:`.run` method.
 
+        :param app: The application backend that knows how to enqueue and
+                    execute tasks.
+        :type app: :class:`~provoke.app.WorkerApplication`
         :param queues: List of queue names to consume task execution messages
                        from.
         :type queues: list
@@ -337,8 +336,8 @@ class WorkerMaster(object):
 
         """
         for i in range(num_processes):
-            worker = _WorkerProcess(self.app, queues, task_limit,
-                                    task_callback, return_callback, exclusive)
+            worker = _WorkerProcess(app, queues, task_limit, task_callback,
+                                    return_callback, exclusive)
             self.workers += [worker]
 
     def _check_workers(self):
