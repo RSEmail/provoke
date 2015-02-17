@@ -117,8 +117,8 @@ class RequeueTask(Exception):
 
 class _WorkerProcess(object):
 
-    def __init__(self, app, queues, limit, process_callback, task_callback,
-                 return_callback, exclusive):
+    def __init__(self, app, queues, limit=None, process_callback=None,
+                 task_callback=None, return_callback=None, exclusive=False):
         super(_WorkerProcess, self).__init__()
         self.app = app
         self.queues = queues
