@@ -89,7 +89,7 @@ class Configuration(object):
         else:
             logging.config.fileConfig(log_config)
 
-    def configure_mysql(self):
+    def configure_mysql(self, section_prefix='mysql:'):
         """Searches for config sections prefixed with ``mysql:`` and loads them
         into the global dictionary of MySQL databases.
 
@@ -102,7 +102,6 @@ class Configuration(object):
         except ImportError:
             return
         MySQLConnection.reset_connection_params()
-        section_prefix = 'mysql:'
         for section in self._config.sections():
             if section.startswith(section_prefix):
                 db_name = section[len(section_prefix):]
@@ -118,7 +117,7 @@ class Configuration(object):
                                   opt_type='int')
                 MySQLConnection.set_connection_params(db_name, **params)
 
-    def configure_http(self):
+    def configure_http(self, section_prefix='http:'):
         """Searches for config sections prefixed with ``http:`` and loads them
         into the global dictionary of HTTP endpoints.
 
@@ -131,7 +130,6 @@ class Configuration(object):
         except ImportError:
             return
         HttpConnection.reset_connection_params()
-        section_prefix = 'http:'
         for section in self._config.sections():
             if section.startswith(section_prefix):
                 name = section[len(section_prefix):]
@@ -146,7 +144,7 @@ class Configuration(object):
                 self._from_config(params, section, 'cert_file')
                 HttpConnection.set_connection_params(name, **params)
 
-    def configure_amqp(self):
+    def configure_amqp(self, section='amqp'):
         """Loads AMQP connection information from the config section ``amqp``.
         This connection information will be available globally.
 
@@ -160,7 +158,6 @@ class Configuration(object):
         except ImportError:
             return
         AmqpConnection.set_connection_params()
-        section = 'amqp'
         if self._config.has_section(section):
             params = {}
             self._from_config(params, section, 'host')
@@ -173,7 +170,7 @@ class Configuration(object):
                               opt_type='float')
             AmqpConnection.set_connection_params(**params)
 
-    def configure_taskgroups(self):
+    def configure_taskgroups(self, section_prefix='taskgroup:'):
         """Searches for sections prefixed with ``taskgroup:`` and loads them
         into the global dictionary of application taskgroups.
 
@@ -183,7 +180,6 @@ class Configuration(object):
         except ImportError:
             return
         WorkerApplication.reset_taskgroups()
-        section_prefix = 'taskgroup:'
         for section in self._config.sections():
             if section.startswith(section_prefix):
                 tg_name = section[len(section_prefix):]
@@ -199,7 +195,7 @@ class Configuration(object):
 
     def get_rlimits(self, section='daemon'):
         try:
-            max_fd = self._config.getint(section, 'max-fd')
+            max_fd = self._config.getint(section, 'max_fd')
             yield resource.RLIMIT_NOFILE, (max_fd, max_fd)
         except (NoOptionError, NoSectionError):
             pass
