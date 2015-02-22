@@ -78,7 +78,6 @@ def start_master(options, plugins):
     master = WorkerMaster(process_callback=process_init)
 
     cfg.configure_logging()
-    cfg.configure_taskgroups()
     cfg.configure_amqp()
     cfg.configure_mysql()
 

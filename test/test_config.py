@@ -163,30 +163,16 @@ class TestConfiguration(unittest.TestCase):
             heartbeat=30.0,
             connect_timeout=10.0)
 
-    @patch.object(WorkerApplication, 'reset_taskgroups')
-    @patch.object(WorkerApplication, 'declare_taskgroup')
-    def test_configure_taskgroups(self, declare_mock, reset_mock):
-        cfgparser = MagicMock()
-        cfg = Configuration(cfgparser)
-        cfgparser.sections.return_value = ['one', 'taskgroup:testgroup']
-        cfgparser.get.side_effect = [NoOptionError(None, 'queue'),
-                                     'testkey',
-                                     'testexchange']
-        cfg.configure_taskgroups()
-        reset_mock.assert_called_with()
-        declare_mock.assert_called_with('testgroup', exchange='testexchange',
-                                        routing_key='testkey')
-
     def test_get_rlimits(self):
         cfgparser = MagicMock()
         cfg = Configuration(cfgparser)
         cfgparser.getint.side_effect = [65535,
-                                        NoOptionError('daemon', 'max-fd')]
+                                        NoOptionError('daemon', 'max_fd')]
         self.assertEqual([(resource.RLIMIT_NOFILE, (65535, 65535))],
                          list(cfg.get_rlimits()))
-        cfgparser.getint.assert_called_with('daemon', 'max-fd')
+        cfgparser.getint.assert_called_with('daemon', 'max_fd')
         self.assertEqual([], list(cfg.get_rlimits()))
-        cfgparser.getint.assert_called_with('daemon', 'max-fd')
+        cfgparser.getint.assert_called_with('daemon', 'max_fd')
 
     def test_get_pidfile(self):
         cfgparser = MagicMock()

@@ -108,7 +108,7 @@ import amqp
 
 from .amqp import AmqpConnection
 
-__all__ = ['WorkerApplication', 'taskgroup']
+__all__ = ['WorkerApplication', 'routing_info']
 
 
 logger = logging.getLogger('provoke.tasks')
@@ -389,16 +389,19 @@ class _TaskSet(object):
         return '<registered task set {0!r}>'.format(task_names)
 
 
-def taskgroup(name):
-    """Convenience decorator for ensuring that the task is a member of the
-    given taskgroup.
+def routing_info(exchange, routing_key=None):
+    """Convenience decorator for specifying the AMQP routing information that
+    task messages will publish with.
 
-    :param name: The taskgroup to make the task a member of.
-    :type name: str
+    :param exchange: The name of the AMQP exchange.
+    :type exchange: str
+    :param routing_key: The AMQP routing key, defaults to the name of the task.
+    :type routing:key: str
 
     """
     def deco(func):
-        func._taskgroup = name
+        func._exchange = exchange
+        func._routing_key = routing_key
         return func
     return deco
 
@@ -408,8 +411,6 @@ class WorkerApplication(object):
     asynchronously by worker processes.
 
     """
-
-    _taskgroups = {None: {'exchange': '', 'routing_key': None}}
 
     def __init__(self):
         super(WorkerApplication, self).__init__()
@@ -425,90 +426,69 @@ class WorkerApplication(object):
         #: synchronously by calling them like a normal function.
         self.tasks = _TaskSet(self)
 
-    @classmethod
-    def reset_taskgroups(cls):
-        """Removes all known taskgroups."""
-        cls._taskgroups = {None: {'exchange': '', 'routing_key': None}}
-
-    @classmethod
-    def declare_taskgroup(cls, name, exchange='', routing_key=None):
-        """Associates a name with a set of routing information. Tasks that are
-        a member of a given taskgroup will use its routing information. Tasks
-        that are not a member of a taskgroup will raise a ``TypeError``
-        exception if they are called asynchronously. Taskgroups are shared
-        between all instances of this class.
-
-        :param name: The name of the taskgroup.
-        :type name: str
-        :param exchange: The AMQP exchange name to use for routing the task
-                         message.
-        :type exchange: str
-        :param routing_key: The AMQP routing key used for routing the task
-                            message.  If this value is ``None``, the task name
-                            will be used instead.
-        :type routing_key: str
-
-        """
-        cls._taskgroups[name] = {'exchange': exchange,
-                                 'routing_key': routing_key}
-
-    def declare_task(self, name, taskgroup=None):
+    def declare_task(self, name, exchange='', routing_key=None):
         """Declares a task without providing its implementation function. This
         may be used by client applications that know a task exists and how to
         use it, but do not have (or need) access to the task function itself.
 
         :param name: The full name of the task.
         :type name: str
-        :param taskgroup: The taskgroup to use for routing the task messages.
-                          Must have been previously declared with
-                          :meth:`.declare_taskgroup`. Default taskgroup uses
-                          exchange ``''`` and the task name as the routing key.
-        :type taskgroup: str
+        :param exchange: The AMQP exchange name to use for routing the task
+                         messages.
+        :type exchange: str
+        :param routing_key: The AMQP routing key to use for routing the task
+                            messages. By default, the name of the task will be
+                            used. A routing key given to
+                            :meth:`~_TaskCaller.apply_async` will always
+                            override this value.
+        :type routing_key: str
 
         """
-        tg_info = self._taskgroups[taskgroup]
-        self.tasks._declare(name, **tg_info)
+        self.tasks._declare(name, exchange=exchange, routing_key=routing_key)
 
-    def register_task(self, func, name=None, taskgroup=None):
-        """Registers a single function as an available task.
+    def register_task(self, func, name=None, exchange=None, routing_key=None):
+        """Registers a single function as an available task. If this function
+        is decorated with :func:`routing_info`, its values will be used as the
+        defaults for ``exchange`` and ``routing_key``.
 
         :param func: The function to call when executing the task.
         :type func: collections.Callable
         :param name: A string to uniquely identify the task, ``func.__name__``
                      is used by default.
         :type name: str
-        :param taskgroup: An optional, previously declared taskgroup name to
-                          make the task a member of. This overrides the use of
-                          the :func:`~provoke.app.taskgroup` decorator.
-        :type taskgroup: str
+        :param exchange: The AMQP exchange name to use for routing the task
+                         messages.
+        :type exchange: str
+        :param routing_key: The AMQP routing key to use for routing the task
+                            messages. By default, the name of the task will be
+                            used. A routing key given to
+                            :meth:`~_TaskCaller.apply_async` will always
+                            override this value.
+        :type routing_key: str
 
         """
         if name is None:
             name = func.__name__
-        tg_info = {'exchange': None, 'routing_key': None}
-        if taskgroup is not None:
-            tg_info = self._taskgroups[taskgroup]
-        elif hasattr(func, '_taskgroup'):
-            tg_info = self._taskgroups[func._taskgroup]
-        self.tasks._set(func, name, **tg_info)
+        if exchange is None and hasattr(func, '_exchange'):
+            exchange = func._exchange
+        if routing_key is None and hasattr(func, '_routing_key'):
+            routing_key = func._routing_key
+        exchange = exchange or ''
+        self.tasks._set(func, name, exchange=exchange, routing_key=routing_key)
 
-    def register_module(self, mod, prefix='', taskgroup=None, what=None):
+    def register_module(self, mod, prefix='', what=None, **routing_info):
         """Convenience method for bulk registering tasks in a module.
-
-        The module may use a special attribute named ``__declare_tasks__`` to
-        specify a list of ``(name, taskgroup)`` tuples, each tuple is passed
-        into a call to :meth:`.declare_task`.
 
         :param mod: The module object to register tasks from.
         :type mod: module
         :param prefix: String prefixed to each task registered from the module.
         :type prefix: str
-        :param taskgroup: An optional, previously declared taskgroup name to
-                          make the task a member of. This overrides the use of
-                          the :func:`~provoke.app.taskgroup` decorator.
-        :type taskgroup: str
         :param what: List of module attribute names to use as tasks. By
                      default, ``mod.__all__`` is used.
+        :param routing_info: Keyword arguments passed in to
+                             :meth:`.register_task` and :meth:`.declare_task`
+                             to provide the ``exchange`` and ``routing_key``
+                             arguments.
 
         """
         if what is None:
@@ -516,6 +496,4 @@ class WorkerApplication(object):
         for func_identifier in what:
             func = getattr(mod, func_identifier)
             func_name = prefix + func.__name__
-            self.register_task(func, func_name, taskgroup)
-        for taskgroup, name in getattr(mod, '__declare_tasks__', []):
-            self.declare_task(name, taskgroup)
+            self.register_task(func, func_name, **routing_info)

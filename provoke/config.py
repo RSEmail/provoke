@@ -153,10 +153,7 @@ class Configuration(object):
         localhost.
 
         """
-        try:
-            from .amqp import AmqpConnection
-        except ImportError:
-            return
+        from .amqp import AmqpConnection
         AmqpConnection.set_connection_params()
         if self._config.has_section(section):
             params = {}
@@ -169,29 +166,6 @@ class Configuration(object):
             self._from_config(params, section, 'connect_timeout',
                               opt_type='float')
             AmqpConnection.set_connection_params(**params)
-
-    def configure_taskgroups(self, section_prefix='taskgroup:'):
-        """Searches for sections prefixed with ``taskgroup:`` and loads them
-        into the global dictionary of application taskgroups.
-
-        """
-        try:
-            from .app import WorkerApplication
-        except ImportError:
-            return
-        WorkerApplication.reset_taskgroups()
-        for section in self._config.sections():
-            if section.startswith(section_prefix):
-                tg_name = section[len(section_prefix):]
-                params = {'exchange': '',
-                          'routing_key': None}
-                self._from_config(params, section, 'queue')
-                self._from_config(params, section, 'routing_key')
-                self._from_config(params, section, 'exchange')
-                if 'queue' in params:
-                    params['exchange'] = ''
-                    params['routing_key'] = params.pop('queue')
-                WorkerApplication.declare_taskgroup(tg_name, **params)
 
     def get_rlimits(self, section='daemon'):
         try:

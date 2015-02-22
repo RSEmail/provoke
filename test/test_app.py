@@ -13,7 +13,7 @@ import amqp
 
 from provoke.amqp import AmqpConnection
 from provoke.app import AsyncResult, _TaskCaller, _TaskSet, \
-    taskgroup, WorkerApplication
+    routing_info, WorkerApplication
 
 
 class JsonMatcher(object):
@@ -259,31 +259,29 @@ class TestWorkerApplication(unittest.TestCase):
 
     def test_declare_task(self):
         app = WorkerApplication()
-        app.declare_taskgroup('testgroup', 'testexchange', 'testroutingkey')
         app.tasks = MagicMock()
-        app.declare_task('taskname', 'testgroup')
+        app.declare_task('taskname', 'testexchange', 'testroutingkey')
         app.tasks._declare.assert_called_with('taskname',
                                               exchange='testexchange',
                                               routing_key='testroutingkey')
 
     def test_register_task(self):
-        @taskgroup('testgroup')
+        @routing_info('testexchange')
         def func1():
             pass
 
         def func2():
             pass
         app = WorkerApplication()
-        app.declare_taskgroup('testgroup', 'testexchange', 'testroutingkey')
         app.tasks = MagicMock()
-        app.register_task(func1, 'funcone')
+        app.register_task(func1, 'funcone', routing_key='testroutingkey')
         app.tasks._set.assert_called_with(func1, 'funcone',
                                           exchange='testexchange',
                                           routing_key='testroutingkey')
-        app.register_task(func2, taskgroup='testgroup')
+        app.register_task(func2, exchange='testexchange')
         app.tasks._set.assert_called_with(func2, 'func2',
                                           exchange='testexchange',
-                                          routing_key='testroutingkey')
+                                          routing_key=None)
 
     def test_register_module(self):
         app = WorkerApplication()
@@ -291,10 +289,10 @@ class TestWorkerApplication(unittest.TestCase):
         app.register_task = MagicMock()
         mod = MagicMock()
         mod.__all__ = ['func1', 'func2']
-        mod.__declare_tasks__ = [('testgroup', 'testtask')]
         mod.func1 = MagicMock(__name__='func1')
         mod.func2 = MagicMock(__name__='func2')
-        app.register_module(mod, 't_')
-        app.register_task.assert_any_call(mod.func1, 't_func1', None)
-        app.register_task.assert_any_call(mod.func2, 't_func2', None)
-        app.declare_task.assert_called_with('testtask', 'testgroup')
+        app.register_module(mod, 't_', routing_key='testroutingkey')
+        app.register_task.assert_any_call(mod.func1, 't_func1',
+                                          routing_key='testroutingkey')
+        app.register_task.assert_any_call(mod.func2, 't_func2',
+                                          routing_key='testroutingkey')
