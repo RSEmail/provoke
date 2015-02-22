@@ -1,18 +1,8 @@
 
-``provoke`` Package
-===================
-
-.. automodule:: provoke
-   :members:
+Provoke
+=======
 
 .. toctree::
 
-   provoke.config
-   provoke.logging
-   provoke.amqp
-   provoke.app
-   provoke.mysql
-   provoke.http
-   provoke.connectionpool
-   provoke.worker
-
+   config
+   api
