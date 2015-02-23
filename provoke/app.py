@@ -160,9 +160,8 @@ class AsyncResult(object):
         returned value of the completed task.
 
         """
-        if self.ready():
-            if hasattr(self, '_return'):
-                return self._return
+        if self.ready() and hasattr(self, '_return'):
+            return self._return
         raise AttributeError
 
     @property
@@ -171,9 +170,8 @@ class AsyncResult(object):
         exception object raised by the completed task.
 
         """
-        if self.ready():
-            if hasattr(self, '_exc'):
-                return self._exc
+        if self.ready() and hasattr(self, '_exc'):
+            return self._exc
         raise AttributeError
 
     @property
@@ -182,9 +180,8 @@ class AsyncResult(object):
         exception traceback from the completed task.
 
         """
-        if self.ready():
-            if hasattr(self, '_exc'):
-                return self._result['exception']['traceback']
+        if self.ready() and hasattr(self, '_exc'):
+            return self._result['exception']['traceback']
         raise AttributeError
 
     def _get_cached_result(self):
@@ -332,8 +329,7 @@ class _TaskCaller(object):
             routing_key = self.routing_key
         with AmqpConnection() as channel:
             if send_result:
-                channel.queue_declare(queue=reply_to,
-                                      auto_delete=False)
+                channel.queue_declare(queue=reply_to, auto_delete=False)
             channel.basic_publish(msg, exchange=self.exchange,
                                   routing_key=routing_key)
         logger.info('Task queued: name=%s, id=%s', self.name, correlation_id)
