@@ -36,7 +36,7 @@ import logging
 import errno
 import signal
 import traceback
-from socket import timeout as socket_timeout
+import threading
 from functools import partial
 
 from six.moves import cPickle
@@ -127,6 +127,7 @@ class _WorkerProcess(object):
         self.task_callback = task_callback
         self.return_callback = return_callback
         self.exclusive = exclusive
+        self.active_connection = None
         self.pid = None
 
     def _send_result(self, channel, reply_to, body):
@@ -188,13 +189,14 @@ class _WorkerProcess(object):
                 self._cancel_consumers(channel)
 
     def _cancel_consumers(self, channel):
-        for consumer_tag in channel.callbacks.keys():
+        for consumer_tag in list(channel.callbacks.keys()):
             channel.basic_cancel(consumer_tag)
 
     def _consume(self):
         self.counter = 0
 
         with AmqpConnection() as channel:
+            self.active_connection = channel.connection
             callback = partial(self._on_message, channel)
             channel.basic_qos(0, 1, False)
             for queue_name in self.queues:
@@ -204,10 +206,7 @@ class _WorkerProcess(object):
                                       exclusive=self.exclusive)
             logger.info('Accepting jobs: queues=%s', repr(self.queues))
             while channel.callbacks:
-                try:
-                    channel.connection.drain_events(timeout=10.0)
-                except socket_timeout:
-                    channel.connection.send_heartbeat()
+                channel.connection.drain_events()
 
     def _try_consuming(self):
         while True:
@@ -219,7 +218,23 @@ class _WorkerProcess(object):
                     logger.exception('Queue access refused')
                 time.sleep(5.0)
 
+    def _send_heartbeats(self):
+        while True:
+            try:
+                interval = self.active_connection.heartbeat / 2.0
+                assert interval > 0.0
+                time.sleep(interval)
+                self.active_connection.send_heartbeat()
+            except Exception:
+                time.sleep(1.0)
+
+    def _start_heartbeat_thread(self):
+        thread = threading.Thread(target=self._send_heartbeats)
+        thread.daemon = True
+        thread.start()
+
     def _run(self):
+        self._start_heartbeat_thread()
         try:
             self._try_consuming()
         except (SystemExit, KeyboardInterrupt):

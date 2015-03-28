@@ -5,8 +5,8 @@ import time
 import errno
 import signal
 import traceback
+import threading
 import json
-from socket import timeout as socket_timeout
 
 from amqp.exceptions import AccessRefused
 
@@ -41,20 +41,18 @@ class TestWorkerProcess(unittest.TestCase):
         worker = _WorkerProcess(app, ['testqueue'], 1, exclusive='exclusive')
         channel = MagicMock(callbacks=True)
 
-        def set_done(timeout):
+        def set_done():
             channel.callbacks = False
-            raise socket_timeout
         channel.connection.drain_events.side_effect = set_done
         amqp_enter_mock.return_value = channel
         worker._consume()
         amqp_enter_mock.assert_called_with()
+        amqp_exit_mock.assert_called_with(None, None, None)
         channel.basic_consume.assert_called_with(queue='testqueue',
                                                  consumer_tag='testqueue',
                                                  callback=ANY,
                                                  exclusive='exclusive')
-        channel.connection.drain_events.assert_called_with(timeout=10.0)
-        channel.connection.send_heartbeat.assert_called_with()
-        amqp_exit_mock.assert_called_with(None, None, None)
+        channel.connection.drain_events.assert_called_with()
 
     def test_send_result(self):
         channel = MagicMock()
@@ -146,33 +144,56 @@ class TestWorkerProcess(unittest.TestCase):
         channel.basic_reject.assert_called_with(ANY, requeue=False)
         self.assertFalse(channel.basic_cancel.called)
 
-    def test_run(self):
+    @patch.object(time, 'sleep')
+    def test_send_heartbeats(self, sleep_mock):
+        sleep_mock.side_effect = [None, Exception, StopIteration]
+        worker = _WorkerProcess(None, None, 1)
+        worker.active_connection = conn = MagicMock(heartbeat=30.0)
+        self.assertRaises(StopIteration, worker._send_heartbeats)
+        self.assertEqual(1, conn.send_heartbeat.call_count)
+        self.assertEqual(3, sleep_mock.call_count)
+        sleep_mock.assert_any_call(15.0)
+        sleep_mock.assert_any_call(1.0)
+
+    @patch.object(threading, 'Thread')
+    def test_run(self, thread_cls_mock):
+        thread_cls_mock.return_value = thread_mock = MagicMock()
         worker_task_callback = MagicMock()
         worker = _WorkerProcess('testapp', ['testqueue'], 10,
                                 task_callback=worker_task_callback)
         worker._consume = MagicMock(side_effect=SystemExit)
         worker._run()
+        thread_cls_mock.assert_called_with(target=ANY)
+        thread_mock.start.assert_called_with()
         self.assertFalse(worker_task_callback.called)
         worker._consume.assert_called_with()
 
     @patch.object(time, 'sleep')
-    def test_run_accessrefused(self, sleep_mock):
+    @patch.object(threading, 'Thread')
+    def test_run_accessrefused(self, thread_cls_mock, sleep_mock):
+        thread_cls_mock.return_value = thread_mock = MagicMock()
         worker_task_callback = MagicMock()
         worker = _WorkerProcess('testapp', ['testqueue'], 10,
                                 task_callback=worker_task_callback)
         worker._consume = MagicMock(side_effect=[AccessRefused, None])
         worker._run()
+        thread_cls_mock.assert_called_with(target=ANY)
+        thread_mock.start.assert_called_with()
         self.assertFalse(worker_task_callback.called)
         sleep_mock.assert_called_once_with(ANY)
         worker._consume.assert_called_with()
 
     @patch.object(traceback, 'print_exc')
-    def test_run_exception(self, print_exc_mock):
+    @patch.object(threading, 'Thread')
+    def test_run_exception(self, thread_cls_mock, print_exc_mock):
+        thread_cls_mock.return_value = thread_mock = MagicMock()
         worker_task_callback = MagicMock()
         worker = _WorkerProcess('testapp', ['testqueue'], 10,
                                 task_callback=worker_task_callback)
         worker._consume = MagicMock(side_effect=AssertionError)
         self.assertRaises(AssertionError, worker._run)
+        thread_cls_mock.assert_called_with(target=ANY)
+        thread_mock.start.assert_called_with()
         self.assertFalse(worker_task_callback.called)
         print_exc_mock.assert_called_with()
         worker._consume.assert_called_with()
