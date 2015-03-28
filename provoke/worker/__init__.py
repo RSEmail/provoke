@@ -234,6 +234,8 @@ class _WorkerProcess(object):
         thread.start()
 
     def _run(self):
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
+        signal.signal(signal.SIGHUP, signal.SIG_DFL)
         self._start_heartbeat_thread()
         try:
             self._try_consuming()

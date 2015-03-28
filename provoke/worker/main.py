@@ -37,6 +37,7 @@ from optparse import OptionParser
 
 from pkg_resources import iter_entry_points
 from six.moves.configparser import SafeConfigParser
+from six.moves import reload_module
 
 from ..config import Configuration
 from . import system, WorkerMaster
@@ -109,6 +110,12 @@ def start_master(options, plugins):
             master.wait()
 
 
+def reload_plugins():
+    for entry_point in iter_entry_points('provoke.workers'):
+        plugin_mod = sys.modules[entry_point.module_name]
+        reload_module(plugin_mod)
+
+
 def main():
     usage = 'Usage: %prog [options] <plugins>'
     parser = OptionParser(description=__doc__, usage=usage)
@@ -134,6 +141,6 @@ def main():
         except BadPlugin as exc:
             parser.error('Unrecognized plugin name: ' + str(exc))
         except ReloadSignal:
-            pass
+            reload_plugins()
         except (SystemExit, KeyboardInterrupt):
             break
