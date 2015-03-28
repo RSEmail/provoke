@@ -10,6 +10,9 @@ install:
   - if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then travis_retry pip install MySQL-python; fi
   - travis_retry pip install pymysql
   - travis_retry pip install -r test/requirements.txt
+  - travis_retry pip install coveralls
   - travis_retry pip install .
 script:
-  - nosetests
+  - nosetests --verbose --with-coverage
+after_success:
+  - coveralls
