@@ -1,8 +1,11 @@
+
 provoke
 =======
 
 Lightweight, asynchronous function execution in Python using AMQP. Provoke was
 inspired by [Celery][4], but intends to be *much* smaller and less invasive.
+
+[![Build Status](https://travis-ci.org/icgood/provoke.svg?branch=master)](https://travis-ci.org/icgood/provoke)
 
 ##### [Documentation](http://provoke.readthedocs.org/)
 
