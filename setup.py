@@ -13,7 +13,7 @@ else:
 setup(name='provoke',
       version='0.3.2',
       author='Ian Good',
-      author_email='ian.good@rackspace.com',
+      author_email='icgood@gmail.com',
       description='Lightweight, asynchronous function execution in Python '
                   'using AMQP.',
       packages=find_packages(),
