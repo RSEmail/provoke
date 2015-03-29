@@ -7,10 +7,10 @@ Provoke Configuration
 A configuration file is not required for using provoke, but it does add some
 distinctly necessary control for larger applications.
 
-Config files can be passed in using the ``--config`` option of
-*provoke-worker*. They are loaded using Python's built-in |ConfigParser| class.
-Provoke will read its configuration and then pass the |ConfigParser| object to
-the plugin init function.
+Config files can be passed in using the ``--config`` option of *provoke*. They
+are loaded using Python's built-in |ConfigParser| class.  Provoke will read its
+configuration and then pass the |ConfigParser| object to the plugin init
+function.
 
 ``[daemon]`` Section
 --------------------

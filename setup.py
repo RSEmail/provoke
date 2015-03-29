@@ -23,4 +23,5 @@ setup(name='provoke',
       },
       entry_points={
           'provoke.workers': ['example = provoke.example.worker:register'],
-          'console_scripts': ['provoke-worker = provoke.worker.main:main']})
+          'console_scripts': ['provoke = provoke.worker.main:main'],
+      })
