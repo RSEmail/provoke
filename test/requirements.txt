@@ -1,5 +1,4 @@
-nose
+pytest
+pytest-cov
 mock
-coverage
-nosexcover
 flake8

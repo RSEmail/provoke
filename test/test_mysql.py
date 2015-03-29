@@ -8,10 +8,8 @@ except ImportError:
 
 try:
     import MySQLdb as mysql_mod
-    connect_func = 'connect'
 except ImportError:
     import pymysql as mysql_mod
-    connect_func = 'Connect'
 
 from provoke.mysql import MySQLConnection, _MySQLContext
 from provoke.connectionpool import ConnectionPool
@@ -20,7 +18,7 @@ from provoke.connectionpool import ConnectionPool
 @patch.object(ConnectionPool, 'enabled', new=False)
 class TestMySQLContext(unittest.TestCase):
 
-    @patch.object(mysql_mod, connect_func)
+    @patch.object(mysql_mod, 'connect')
     def test_check(self, conn_func_mock):
         conn_func_mock.return_value = conn = MagicMock()
         ctx = _MySQLContext(one=1)
@@ -28,7 +26,7 @@ class TestMySQLContext(unittest.TestCase):
         conn_func_mock.assert_called_with(one=1)
         conn.ping.assert_called_with()
 
-    @patch.object(mysql_mod, connect_func)
+    @patch.object(mysql_mod, 'connect')
     def test_check_fail(self, conn_func_mock):
         conn_func_mock.return_value = conn = MagicMock()
         conn.ping.side_effect = mysql_mod.OperationalError
@@ -37,7 +35,7 @@ class TestMySQLContext(unittest.TestCase):
         conn_func_mock.assert_called_with(one=1)
         conn.ping.assert_called_with()
 
-    @patch.object(mysql_mod, connect_func)
+    @patch.object(mysql_mod, 'connect')
     def test_close(self, conn_func_mock):
         conn_func_mock.return_value = conn = MagicMock()
         ctx = _MySQLContext(one=1)
@@ -59,7 +57,7 @@ class TestMySQLConnection(unittest.TestCase):
         self.assertEqual(expected, received)
         MySQLConnection._connection_params = old
 
-    @patch.object(mysql_mod, connect_func)
+    @patch.object(mysql_mod, 'connect')
     def test_successful(self, conn_func_mock):
         conn_func_mock.return_value = conn_mock = MagicMock()
         with MySQLConnection('test') as testdb:
@@ -67,7 +65,7 @@ class TestMySQLConnection(unittest.TestCase):
         conn_func_mock.assert_called_with()
         conn_mock.close.assert_called_with()
 
-    @patch.object(mysql_mod, connect_func)
+    @patch.object(mysql_mod, 'connect')
     def test_exception_raised(self, conn_func_mock):
         conn_func_mock.return_value = conn_mock = MagicMock()
         try:
@@ -81,7 +79,7 @@ class TestMySQLConnection(unittest.TestCase):
         conn_func_mock.assert_called_with()
         conn_mock.close.assert_called_with()
 
-    @patch.object(mysql_mod, connect_func)
+    @patch.object(mysql_mod, 'connect')
     def test_close_exception(self, conn_func_mock):
         conn_func_mock.return_value = conn_mock = MagicMock()
         conn_mock.close.side_effect = ValueError('close failure')

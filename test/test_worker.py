@@ -15,6 +15,7 @@ try:
 except ImportError:
     from unittest.mock import patch, MagicMock, ANY
 
+from provoke import worker as worker_mod
 from provoke.amqp import AmqpConnection
 from provoke.worker import _WorkerProcess, WorkerMaster, \
     get_worker_data, get_worker_app, DiscardTask
@@ -33,6 +34,9 @@ class JsonMatcher(object):
 
 
 class TestWorkerProcess(unittest.TestCase):
+
+    def setUp(self):
+        worker_mod._current_worker_data = {}
 
     @patch.object(AmqpConnection, '__enter__')
     @patch.object(AmqpConnection, '__exit__')

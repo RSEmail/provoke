@@ -50,9 +50,12 @@ from __future__ import absolute_import
 
 import logging
 
-import pymysql
+try:
+    import MySQLdb as mysql_mod
+except ImportError:
+    import pymysql as mysql_mod
 
-from ..connectionpool import ConnectionPool
+from .connectionpool import ConnectionPool
 
 __all__ = ['MySQLConnection']
 
@@ -64,8 +67,12 @@ class _MySQLContext(object):
 
     def __init__(self, **params):
         super(_MySQLContext, self).__init__()
-        self.conn = pymysql.Connect(**params)
-        self.module = pymysql
+        if 'password' in params:
+            params['passwd'] = params.pop('password')
+        if 'database' in params:
+            params['db'] = params.pop('database')
+        self.conn = mysql_mod.connect(**params)
+        self.module = mysql_mod
         self._set_session_vars()
         host = params.get('host', 'localhost')
         db = params.get('db')
@@ -82,7 +89,7 @@ class _MySQLContext(object):
     def check(self):
         try:
             self.conn.ping()
-        except pymysql.OperationalError:
+        except mysql_mod.OperationalError:
             return False
         return True
 
