@@ -108,7 +108,7 @@ import amqp
 
 from .amqp import AmqpConnection
 
-__all__ = ['WorkerApplication', 'routing_info']
+__all__ = ['AsyncResult', 'WorkerApplication', 'routing_info']
 
 
 logger = logging.getLogger('provoke.tasks')
