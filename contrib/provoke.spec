@@ -28,7 +28,7 @@ Lightweight, asynchronous function execution in Python using AMQP.
 
 %install
 %{__python} setup.py install --skip-build -O1 --record=files.txt --single-version-externally-managed --root %{buildroot}
-install -m 755 %{name}.init %{buildroot}/%{_initddir}/%{name}
+install -m 755 %{SOURCE1} %{buildroot}/%{_initddir}/%{name}
 
 %post
 /sbin/chkconfig --add %{name}
