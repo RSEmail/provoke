@@ -1,0 +1,93 @@
+#!/bin/bash
+
+# provoke - Execute Python functions asynchronously
+#
+# chkconfig: - 85 15
+# description: Execute Python functions asynchronously
+# processname: provoke
+
+# author: Ian Good
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+DESC=provoke
+WORKER_BIN=/usr/bin/provoke
+DAEMON_OPTS=""
+PLUGINS=""
+
+[ -f /etc/sysconfig/provoke ] && . /etc/sysconfig/provoke
+
+if [ -z "$PLUGINS" ]; then
+    PLUGINS=$( $WORKER_BIN --list-plugins | grep -v example )
+fi
+
+lockfile=/var/lock/subsys/provoke
+
+start () {
+    echo -n "Starting $DESC: "
+    daemon $WORKER_BIN --daemon $DAEMON_OPTS $PLUGINS
+    retval=$?
+    echo
+    [ $retval -eq 0 ] && touch $lockfile
+    return $retval
+}
+
+stop () {
+    echo -n "Stopping $DESC: "
+    killproc $WORKER_BIN
+    retval=$?
+    echo
+    [ $retval -eq 0 ] && rm -f $lockfile
+    return $retval
+}
+
+reload () {
+    echo -n "Reloading $DESC: "
+    killproc $WORKER_BIN -HUP
+    retval=$?
+    echo
+    [ $retval -eq 0 ] && rm -f $lockfile
+    return $retval
+}
+
+rh_status () {
+    status $WORKER_BIN
+}
+
+rh_status_q() {
+    rh_status >/dev/null 2>&1
+}
+
+case "$1" in
+    start)
+        rh_status_q && exit 0
+        start
+        exit $?
+        ;;
+    stop)
+        rh_status_q || exit 0
+        stop
+        exit $?
+        ;;
+    reload)
+        reload
+        exit $?
+        ;;
+    restart)
+        rh_status_q && stop
+        start
+        exit $?
+        ;;
+    status)
+        rh_status
+        ;;
+    *)  
+        echo "Usage: $0 {start|stop|restart|status}" >&2
+        exit 2
+        ;;
+esac
+
+exit 0
