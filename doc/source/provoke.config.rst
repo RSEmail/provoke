@@ -1,7 +1,7 @@
 
-``provoke.common.config`` Module
-================================
+``provoke.config`` Module
+=========================
 
-.. automodule:: provoke.common.config
+.. automodule:: provoke.config
    :members:
 

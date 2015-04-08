@@ -1,7 +1,7 @@
 
-``provoke.common.connectionpool`` Module
-========================================
+``provoke.connectionpool`` Module
+=================================
 
-.. automodule:: provoke.common.connectionpool
+.. automodule:: provoke.connectionpool
    :members:
 

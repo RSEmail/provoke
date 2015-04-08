@@ -1,7 +1,7 @@
 
-``provoke.common.app`` Module
-=============================
+``provoke.app`` Module
+======================
 
-.. automodule:: provoke.common.app
+.. automodule:: provoke.app
    :members:
 

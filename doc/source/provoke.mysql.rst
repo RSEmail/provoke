@@ -1,7 +1,7 @@
 
-``provoke.common.mysql`` Module
-===============================
+``provoke.mysql`` Module
+========================
 
-.. automodule:: provoke.common.mysql
+.. automodule:: provoke.mysql
    :members:
 

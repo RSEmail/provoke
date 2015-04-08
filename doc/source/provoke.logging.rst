@@ -1,7 +1,7 @@
 
-``provoke.common.logging`` Module
-=================================
+``provoke.logging`` Module
+==========================
 
-.. automodule:: provoke.common.logging
+.. automodule:: provoke.logging
    :members:
 

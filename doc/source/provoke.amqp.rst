@@ -1,7 +1,7 @@
 
-``provoke.common.amqp`` Module
-==============================
+``provoke.amqp`` Module
+=======================
 
-.. automodule:: provoke.common.amqp
+.. automodule:: provoke.amqp
    :members:
 
