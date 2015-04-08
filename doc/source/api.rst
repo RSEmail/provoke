@@ -5,7 +5,6 @@ API Documentation
 .. toctree::
 
    provoke.config
-   provoke.logging
    provoke.amqp
    provoke.app
    provoke.mysql
