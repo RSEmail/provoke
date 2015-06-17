@@ -55,12 +55,11 @@ Install the package in development mode. **Note:** Do not use `sudo`!
 
     python setup.py develop
 
-The easiest way to run the tests is with `nosetests`. You need to install it
-into the virtual environment, even if it is installed system-wide.
+Finally, install test dependencies and run `py.test`:
 
     pip install -r test/requirements.txt
     pip install MySQL-python
-    nosetests -v
+    py.test
 
 [1]: http://www.virtualenv.org/en/latest/
 [2]: provoke/example/worker.py
