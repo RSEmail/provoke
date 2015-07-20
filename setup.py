@@ -11,7 +11,7 @@ else:
 
 
 setup(name='provoke',
-      version='0.4.0',
+      version='0.4.1',
       author='Ian Good',
       author_email='icgood@gmail.com',
       description='Lightweight, asynchronous function execution in Python '
