@@ -59,8 +59,10 @@ producers and executors see the task system.
       :param routing_key: Override the default AMQP routing key for the task
                           with the given string.
       :type routing_key: str
-      :param send_result: Create a temporary result queue and request that the
-                          worker publish the task's result to it.
+      :param send_result: Create a result queue and request that the worker
+                          publish the task's result to it. Use a `Queue TTL
+                          <https://www.rabbitmq.com/ttl.html#queue-ttl>`_
+                          policy to expire these queues.
       :type send_result: bool
       :returns: If ``send_result`` is True, used retrieve the result of the
                 task's execution when it is ready. Otherwise, returns ``None``.
@@ -125,6 +127,9 @@ class AsyncResult(object):
 
     """
 
+    #: The prefix given to the result queue.
+    result_queue_prefix = 'result_'
+
     def __init__(self, correlation_id):
         super(AsyncResult, self).__init__()
         self.correlation_id = correlation_id
@@ -132,7 +137,7 @@ class AsyncResult(object):
     @property
     def result_queue(self):
         """The name of the queue where results will be published."""
-        return 'result_{0}'.format(self.correlation_id)
+        return '{0}{1}'.format(self.result_queue_prefix, self.correlation_id)
 
     @property
     def args(self):
