@@ -7,6 +7,7 @@ inspired by [Celery][4], but intends to be *much* smaller and less invasive.
 
 [![Build Status](https://travis-ci.org/icgood/provoke.svg?branch=master)](https://travis-ci.org/icgood/provoke)
 [![Coverage Status](https://coveralls.io/repos/icgood/provoke/badge.svg?branch=master)](https://coveralls.io/r/icgood/provoke?branch=master)
+[![Documentation Status](https://readthedocs.org/projects/provoke/badge/?version=latest)](https://readthedocs.org/projects/provoke/?badge=latest)
 
 ##### [Documentation](http://provoke.readthedocs.org/)
 
