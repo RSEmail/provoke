@@ -16,3 +16,4 @@ args = sys.argv[1:] or ['World!', 'Hello']
 print('Sending:', ' '.join(args))
 res = app.tasks.do_work.apply_async(args, send_result=True)
 print('Received result:', ' '.join(res.get()))
+res.delete()

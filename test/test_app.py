@@ -38,7 +38,7 @@ class TestAsyncResult(unittest.TestCase):
         self.assertRaises(AttributeError, getattr, res, 'returned')
         self.assertRaises(AttributeError, getattr, res, 'exception')
         self.assertRaises(AttributeError, getattr, res, 'traceback')
-        res._result = {'args': 123, 'kwargs': 456, 'task_name': 'test',
+        res._result = {'args': 123, 'kwargs': 456, 'task': 'test',
                        'exception': {'traceback': 'test traceback'}}
         self.assertEqual((123, 456), res.args)
         self.assertEqual('test', res.name)
@@ -50,16 +50,17 @@ class TestAsyncResult(unittest.TestCase):
         self.assertEqual('test traceback', res.traceback)
 
     def test_on_message(self):
-        res = AsyncResult(None)
-        msg = MagicMock(body='{"task_name": "test", "return": 123}')
+        res = AsyncResult('testid')
+        msg = MagicMock(body='{"task_name": "test", "return": 123}',
+                        correlation_id='testid')
         res._on_message(msg)
         self.assertEqual(123, res._return)
         self.assertFalse(hasattr(res, '_exc'))
 
     def test_on_message_fail(self):
-        res = AsyncResult(None)
+        res = AsyncResult('testid')
         body = '{"task_name": "test", "exception": {"value": "I123\\n."}}'
-        msg = MagicMock(body=body)
+        msg = MagicMock(body=body, correlation_id='testid')
         res._on_message(msg)
         self.assertEqual(123, res._exc)
         self.assertFalse(hasattr(res, '_return'))
@@ -89,7 +90,6 @@ class TestAsyncResult(unittest.TestCase):
         channel.basic_consume.assert_called_with(queue='result_test',
                                                  no_ack=True, callback=ANY)
         channel.connection.drain_events.assert_called_with(timeout=10.0)
-        channel.queue_delete.assert_called_with('result_test')
         self.assertFalse(channel.connection.send_heartbeat.called)
 
     @patch.object(AmqpConnection, '__enter__')
@@ -109,7 +109,6 @@ class TestAsyncResult(unittest.TestCase):
         exit_mock.assert_called_with(None, None, None)
         on_msg_mock.assert_called_with(msg)
         channel.basic_get.assert_called_with(queue='result_test', no_ack=True)
-        channel.queue_delete.assert_called_with('result_test')
 
     @patch.object(AmqpConnection, '__enter__')
     @patch.object(AmqpConnection, '__exit__')
@@ -122,7 +121,6 @@ class TestAsyncResult(unittest.TestCase):
         channel.basic_consume.assert_called_with(queue='result_test',
                                                  no_ack=True, callback=ANY)
         self.assertFalse(channel.connection.drain_events.called)
-        self.assertFalse(channel.queue_delete.called)
         self.assertFalse(channel.connection.send_heartbeat.called)
 
     @patch.object(AmqpConnection, '__enter__')
@@ -169,6 +167,23 @@ class TestAsyncResult(unittest.TestCase):
         del res._return
         res._exc = True
         self.assertFalse(res.successful())
+
+    @patch.object(AmqpConnection, '__enter__')
+    @patch.object(AmqpConnection, '__exit__')
+    def test_delete(self, exit_mock, enter_mock):
+        enter_mock.return_value = channel = MagicMock()
+        res = AsyncResult('test')
+        res.delete()
+        channel.queue_delete.assert_called_once_with('result_test')
+
+    @patch.object(AmqpConnection, '__enter__')
+    @patch.object(AmqpConnection, '__exit__')
+    def test_delete_notfound(self, exit_mock, enter_mock):
+        enter_mock.return_value = channel = MagicMock()
+        channel.queue_delete.side_effect = amqp.exceptions.NotFound
+        res = AsyncResult('test')
+        res.delete()
+        channel.queue_delete.assert_called_once_with('result_test')
 
 
 class TestTaskCall(unittest.TestCase):

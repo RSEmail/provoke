@@ -59,10 +59,8 @@ producers and executors see the task system.
       :param routing_key: Override the default AMQP routing key for the task
                           with the given string.
       :type routing_key: str
-      :param send_result: Create a result queue and request that the worker
-                          publish the task's result to it. Use a `Queue TTL
-                          <https://www.rabbitmq.com/ttl.html#queue-ttl>`_
-                          policy to expire these queues.
+      :param send_result: Create a unique result queue and request that the
+                          worker publish the task's result to it.
       :type send_result: bool
       :returns: If ``send_result`` is True, used retrieve the result of the
                 task's execution when it is ready. Otherwise, returns ``None``.
@@ -121,13 +119,18 @@ class AsyncResult(object):
     with the builtin :py:class:`multiprocessing.pool.AsyncResult` class
     interface.
 
+    If you expect more than one worker to execute the task, this object may be
+    iterated on to gather all results.
+
     :param correlation_id: The ID used to identify tasks and correlate their
                            request and response messages.
     :type correlation_id: str
 
     """
 
-    #: The prefix given to the result queue.
+    #: The prefix given to the result queue. This prefix can be used to create
+    #: `Queue TTL <https://www.rabbitmq.com/ttl.html#queue-ttl>`_ policy to
+    #: clean up these queues.
     result_queue_prefix = 'result_'
 
     def __init__(self, correlation_id):
@@ -156,7 +159,7 @@ class AsyncResult(object):
 
         """
         if self.ready():
-            return self._result['task_name']
+            return self._result['task']
         raise AttributeError
 
     @property
@@ -196,6 +199,7 @@ class AsyncResult(object):
             raise self._exc
 
     def _on_message(self, msg):
+        assert msg.correlation_id == self.correlation_id
         self._result = res = json.loads(msg.body)
         if 'return' in res:
             self._return = res['return']
@@ -211,13 +215,13 @@ class AsyncResult(object):
                 raise KeyError(self.result_queue)
             if msg:
                 self._on_message(msg)
-                channel.queue_delete(self.result_queue)
                 return self._get_cached_result()
         raise TimeoutError(0.0)
 
     def _wait(self, timeout):
         start_time = time.time()
         with AmqpConnection() as channel:
+            channel.basic_qos(0, 1, False)
             try:
                 channel.basic_consume(queue=self.result_queue,
                                       no_ack=True, callback=self._on_message)
@@ -237,7 +241,6 @@ class AsyncResult(object):
                     if exc.errno != errno.EAGAIN:
                         raise
                 if hasattr(self, '_result'):
-                    channel.queue_delete(self.result_queue)
                     return self._get_cached_result()
                 if timeout is not None and remaining <= 0.0:
                     break
@@ -298,6 +301,14 @@ class AsyncResult(object):
         if self.ready():
             return hasattr(self, '_return')
         return False
+
+    def delete(self):
+        """Delete the task result queue, if it still exists."""
+        with AmqpConnection() as channel:
+            try:
+                channel.queue_delete(self.result_queue)
+            except amqp.exceptions.NotFound:
+                pass
 
 
 class _TaskCaller(object):
