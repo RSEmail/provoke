@@ -61,7 +61,7 @@ class TestWorkerProcess(unittest.TestCase):
     def test_send_result(self):
         channel = MagicMock()
         worker = _WorkerProcess(None, None)
-        worker._send_result(channel, 'test', {})
+        worker._send_result(channel, 'testid', 'test', {})
         channel.basic_publish.assert_called_with(ANY, exchange='',
                                                  routing_key='test')
 
@@ -82,7 +82,7 @@ class TestWorkerProcess(unittest.TestCase):
         app.tasks.func.apply.assert_called_with([1], {'two': 2}, 'testid')
         channel.basic_ack.assert_called_with(ANY)
         return_cb.assert_called_with('func', 'return')
-        send_result_mock.assert_called_with(channel, 'test', ANY)
+        send_result_mock.assert_called_with(channel, 'testid', 'test', ANY)
         self.assertFalse(channel.basic_cancel.called)
 
     def test_on_message_task_callback(self):
@@ -144,7 +144,7 @@ class TestWorkerProcess(unittest.TestCase):
         self.assertRaises(ValueError, worker._on_message, channel, msg)
         app.tasks.func.apply.assert_called_with([1], {'two': 2}, 'testid')
         return_cb.assert_called_with('func', None)
-        send_result_mock.assert_called_with(channel, 'test', ANY)
+        send_result_mock.assert_called_with(channel, 'testid', 'test', ANY)
         channel.basic_reject.assert_called_with(ANY, requeue=False)
         self.assertFalse(channel.basic_cancel.called)
 

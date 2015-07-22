@@ -130,9 +130,10 @@ class _WorkerProcess(object):
         self.active_connection = None
         self.pid = None
 
-    def _send_result(self, channel, reply_to, body):
+    def _send_result(self, channel, task_id, reply_to, body):
         result_raw = json.dumps(body)
-        msg = amqp.Message(result_raw, content_type='application/json')
+        msg = amqp.Message(result_raw, content_type='application/json',
+                           correlation_id=task_id)
         channel.basic_publish(msg, exchange='', routing_key=reply_to)
 
     def _handle_message(self, channel, msg):
@@ -159,14 +160,14 @@ class _WorkerProcess(object):
                 if reply_to:
                     body['exception'] = {'value': cPickle.dumps(exc),
                                          'traceback': traceback.format_exc()}
-                    self._send_result(channel, reply_to, body)
+                    self._send_result(channel, task_id, reply_to, body)
                 if self.return_callback:
                     self.return_callback(task_name, None)
                 raise
             else:
                 if reply_to:
                     body['return'] = ret
-                    self._send_result(channel, reply_to, body)
+                    self._send_result(channel, task_id, reply_to, body)
                 if self.return_callback:
                     self.return_callback(task_name, ret)
 
