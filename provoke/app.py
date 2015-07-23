@@ -43,7 +43,8 @@ producers and executors see the task system.
       :rtype: :class:`AsyncResult`
 
    .. method:: apply_async(args, kwargs=None, correlation_id=None,
-                           routing_key=None, send_result=False)
+                           routing_key=None, send_result=False,
+                           result_queue=None)
 
       Triggers the asynchronous execution of a task by a separate worker
       process. Tasks will be executed in the order they are triggered, so a
@@ -59,9 +60,13 @@ producers and executors see the task system.
       :param routing_key: Override the default AMQP routing key for the task
                           with the given string.
       :type routing_key: str
-      :param send_result: Create a unique result queue and request that the
-                          worker publish the task's result to it.
+      :param send_result: Request that the worker publish the task's result to
+                          a result queue.
       :type send_result: bool
+      :param result_queue: If ``send_result`` is True, use the given string as
+                           the result queue name. By default a queue is created
+                           based on the correlation ID string.
+      :type result_queue: str
       :returns: If ``send_result`` is True, used retrieve the result of the
                 task's execution when it is ready. Otherwise, returns ``None``.
       :rtype: :class:`AsyncResult`
@@ -99,6 +104,7 @@ import time
 import json
 import errno
 import logging
+from collections import deque
 from uuid import uuid4
 from socket import timeout as socket_timeout, error as socket_error
 from multiprocessing import TimeoutError
@@ -119,28 +125,24 @@ class AsyncResult(object):
     with the builtin :py:class:`multiprocessing.pool.AsyncResult` class
     interface.
 
-    If you expect more than one worker to execute the task, this object may be
-    iterated on to gather all results.
-
-    :param correlation_id: The ID used to identify tasks and correlate their
-                           request and response messages.
-    :type correlation_id: str
+    :param result_queue: The AMQP queue name where task results are posted.
+    :type result_queue: str
 
     """
 
-    #: The prefix given to the result queue. This prefix can be used to create
-    #: `Queue TTL <https://www.rabbitmq.com/ttl.html#queue-ttl>`_ policy to
-    #: clean up these queues.
-    result_queue_prefix = 'result_'
-
-    def __init__(self, correlation_id):
+    def __init__(self, result_queue):
         super(AsyncResult, self).__init__()
-        self.correlation_id = correlation_id
+        self.result_queue = result_queue
 
     @property
-    def result_queue(self):
-        """The name of the queue where results will be published."""
-        return '{0}{1}'.format(self.result_queue_prefix, self.correlation_id)
+    def correlation_id(self):
+        """If the result is available, this will be the correlation identifier
+        string of the original task.
+
+        """
+        if self.ready():
+            return self._correlation_id
+        raise AttributeError
 
     @property
     def args(self):
@@ -198,33 +200,36 @@ class AsyncResult(object):
         elif hasattr(self, '_exc'):
             raise self._exc
 
-    def _on_message(self, msg):
-        assert msg.correlation_id == self.correlation_id
-        self._result = res = json.loads(msg.body)
+    @classmethod
+    def _handle_message(cls, msg, on):
+        on._correlation_id = msg.correlation_id
+        on._result = res = json.loads(msg.body)
         if 'return' in res:
-            self._return = res['return']
+            on._return = res['return']
         elif 'exception' in res:
             exception_raw = res['exception']['value'].encode('ascii')
-            self._exc = cPickle.loads(exception_raw)
+            on._exc = cPickle.loads(exception_raw)
 
     def _check(self):
         with AmqpConnection() as channel:
             try:
-                msg = channel.basic_get(queue=self.result_queue, no_ack=True)
+                return channel.basic_get(queue=self.result_queue, no_ack=True)
             except amqp.exceptions.NotFound:
                 raise KeyError(self.result_queue)
-            if msg:
-                self._on_message(msg)
-                return self._get_cached_result()
         raise TimeoutError(0.0)
 
     def _wait(self, timeout):
         start_time = time.time()
+        msgs = deque()
+
+        def msg_callback(msg):
+            msgs.append(msg)
+
         with AmqpConnection() as channel:
             channel.basic_qos(0, 1, False)
             try:
-                channel.basic_consume(queue=self.result_queue,
-                                      no_ack=True, callback=self._on_message)
+                tag = channel.basic_consume(queue=self.result_queue,
+                                            callback=msg_callback)
             except amqp.exceptions.NotFound:
                 raise KeyError(self.result_queue)
             while channel.callbacks:
@@ -240,8 +245,15 @@ class AsyncResult(object):
                 except socket_error as exc:
                     if exc.errno != errno.EAGAIN:
                         raise
-                if hasattr(self, '_result'):
-                    return self._get_cached_result()
+                while len(msgs):
+                    msg = msgs.popleft()
+                    try:
+                        yield msg
+                    except GeneratorExit:
+                        channel.basic_cancel(tag)
+                        raise
+                    finally:
+                        channel.basic_ack(msg.delivery_tag)
                 if timeout is not None and remaining <= 0.0:
                     break
         raise TimeoutError(timeout)
@@ -260,9 +272,14 @@ class AsyncResult(object):
         if hasattr(self, '_result'):
             return self._get_cached_result()
         if timeout == 0.0:
-            return self._check()
+            msg = self._check()
         else:
-            return self._wait(timeout)
+            for first in self._wait(timeout):
+                msg = first
+                break
+        if msg:
+            self._handle_message(msg, self)
+            return self._get_cached_result()
 
     def wait(self, timeout=None):
         """Waits for the task result to become available. It does not return
@@ -302,6 +319,27 @@ class AsyncResult(object):
             return hasattr(self, '_return')
         return False
 
+    def gather(self, timeout=None):
+        """Returns a generator object that waits for task results to be
+        available on the result queue, yielding a new :class:`AsyncResult`
+        object for each one.
+
+        This is useful if you route a single task to many
+        worker queues and want to gather the results of each worker's
+        execution.
+
+        :param timeout: Wait at most this many seconds.
+        :type timeout: float
+
+        """
+        try:
+            for msg in self._wait(timeout):
+                next_result = AsyncResult(self.result_queue)
+                self._handle_message(msg, next_result)
+                yield next_result
+        except TimeoutError:
+            pass
+
     def delete(self):
         """Delete the task result queue, if it still exists."""
         with AmqpConnection() as channel:
@@ -328,15 +366,15 @@ class _TaskCaller(object):
         return self.apply_async(args, kwargs)
 
     def apply_async(self, args, kwargs=None, correlation_id=None,
-                    routing_key=None, send_result=False):
+                    routing_key=None, send_result=False, result_queue=None):
         if correlation_id is None:
             correlation_id = str(uuid4())
         job = {'task': self.name,
                'args': args,
                'kwargs': kwargs}
         job_raw = json.dumps(job)
-        result = AsyncResult(correlation_id)
-        reply_to = result.result_queue if send_result else None
+        reply_to = result_queue or 'result_{0}'.format(correlation_id)
+        result = AsyncResult(reply_to)
         msg = amqp.Message(job_raw,
                            content_type='application/json',
                            reply_to=reply_to,
@@ -344,7 +382,7 @@ class _TaskCaller(object):
         if routing_key is None:
             routing_key = self.routing_key
         with AmqpConnection() as channel:
-            if send_result:
+            if send_result and result_queue is None:
                 channel.queue_declare(queue=reply_to, auto_delete=False)
             channel.basic_publish(msg, exchange=self.exchange,
                                   routing_key=routing_key)
