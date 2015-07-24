@@ -67,10 +67,9 @@ def get_worker_data(key, default=None):
     :raises: RuntimeError
 
     """
-    if _current_worker_data:
-        return _current_worker_data.get(key, default)
-    else:
+    if not _current_worker_data:
         raise RuntimeError('Must be called from worker process')
+    return _current_worker_data.get(key, default)
 
 
 def get_worker_app():
@@ -82,10 +81,9 @@ def get_worker_app():
     :raises: RuntimeError
 
     """
-    if _current_worker_app:
-        return _current_worker_app
-    else:
+    if not _current_worker_app:
         raise RuntimeError('Must be called from worker process')
+    return _current_worker_app
 
 
 class DiscardTask(Exception):
