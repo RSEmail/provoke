@@ -49,7 +49,6 @@ reload () {
     killproc $WORKER_BIN -HUP
     retval=$?
     echo
-    [ $retval -eq 0 ] && rm -f $lockfile
     return $retval
 }
 
