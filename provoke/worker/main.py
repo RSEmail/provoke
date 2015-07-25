@@ -33,6 +33,7 @@ import time
 import logging
 import signal
 import resource
+import os.path
 from optparse import OptionParser
 
 from pkg_resources import iter_entry_points
@@ -116,6 +117,13 @@ def reload_plugins():
         reload_module(plugin_mod)
 
 
+def check_argv0(prefix='provoke-'):
+    basename = os.path.basename(sys.argv[0])
+    root, _ = os.path.splitext(basename)
+    if root.startswith(prefix):
+        return root[len(prefix):]
+
+
 def main():
     usage = 'Usage: %prog [options] <plugins>'
     parser = OptionParser(description=__doc__, usage=usage)
@@ -132,8 +140,13 @@ def main():
         for entry_point in iter_entry_points('provoke.workers'):
             print(entry_point.name)
         return
-    elif not plugins:
-        parser.error('One or more plugins required')
+
+    if not plugins:
+        basename_plugin = check_argv0()
+        if basename_plugin:
+            plugins = [basename_plugin]
+        else:
+            parser.error('One or more plugins required')
 
     while True:
         try:
