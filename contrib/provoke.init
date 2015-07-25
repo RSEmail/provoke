@@ -4,31 +4,26 @@
 #
 # chkconfig: - 85 15
 # description: Execute Python functions asynchronously
-# processname: provoke
 
 # author: Ian Good
 
 # Source function library.
 . /etc/rc.d/init.d/functions
 
-PATH=/sbin:/bin:/usr/sbin:/usr/bin
+exec="/usr/bin/provoke"
+prog=$(basename $0)
+args=""
+plugin=""
 
-DESC=provoke
-WORKER_BIN=/usr/bin/provoke
-DAEMON_OPTS=""
-PLUGINS=""
+[ -e /etc/sysconfig/$prog ] && . /etc/sysconfig/$prog
 
-[ -f /etc/sysconfig/provoke ] && . /etc/sysconfig/provoke
-
-if [ -z "$PLUGINS" ]; then
-    PLUGINS=$( $WORKER_BIN --list-plugins | grep -v example )
-fi
-
-lockfile=/var/lock/subsys/provoke
+desc="Provoke ($plugin Plugin)"
+lockfile=/var/lock/subsys/$prog
 
 start () {
-    echo -n "Starting $DESC: "
-    daemon $WORKER_BIN --daemon $DAEMON_OPTS $PLUGINS
+    [ -x $exec ] || exit 5
+    echo -n $"Starting $desc: "
+    daemon $exec --daemon $args $plugin
     retval=$?
     echo
     [ $retval -eq 0 ] && touch $lockfile
@@ -36,24 +31,34 @@ start () {
 }
 
 stop () {
-    echo -n "Stopping $DESC: "
-    killproc $WORKER_BIN
+    echo -n $"Stopping $desc: "
+    killproc $exec
     retval=$?
     echo
     [ $retval -eq 0 ] && rm -f $lockfile
     return $retval
 }
 
+restart() {
+    stop
+    start
+}
+
 reload () {
-    echo -n "Reloading $DESC: "
-    killproc $WORKER_BIN -HUP
+    echo -n $"Reloading $desc: "
+    killproc $exec -HUP
     retval=$?
     echo
     return $retval
 }
 
-rh_status () {
-    status $WORKER_BIN
+force_reload() {
+    restart
+}
+
+rh_status() {
+    # run checks to determine if the service is running or use generic status
+    status $prog
 }
 
 rh_status_q() {
@@ -63,30 +68,31 @@ rh_status_q() {
 case "$1" in
     start)
         rh_status_q && exit 0
-        start
-        exit $?
+        $1
         ;;
     stop)
         rh_status_q || exit 0
-        stop
-        exit $?
-        ;;
-    reload)
-        reload
-        exit $?
+        $1
         ;;
     restart)
-        rh_status_q && stop
-        start
-        exit $?
+        $1
+        ;;
+    reload)
+        rh_status_q || exit 7
+        $1
+        ;;
+    force-reload)
+        force_reload
         ;;
     status)
         rh_status
         ;;
-    *)  
-        echo "Usage: $0 {start|stop|restart|status}" >&2
-        exit 2
+    condrestart|try-restart)
+        rh_status_q || exit 0
+        restart
         ;;
+    *)
+        echo $"Usage: $0 {start|stop|status|restart|condrestart|try-restart|reload|force-reload}"
+        exit 2
 esac
-
-exit 0
+exit $?

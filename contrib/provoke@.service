@@ -1,0 +1,14 @@
+
+[Unit]
+Description=Provoke (%i Plugin)
+Documentation=https://github.com/icgood/provoke
+
+[Service]
+EnvironmentFile=-/etc/sysconfig/provoke-%I
+ExecStart=/usr/bin/provoke $args %I
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+
