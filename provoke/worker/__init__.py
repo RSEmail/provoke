@@ -67,10 +67,9 @@ def get_worker_data(key, default=None):
     :raises: RuntimeError
 
     """
-    if _current_worker_data:
-        return _current_worker_data.get(key, default)
-    else:
+    if not _current_worker_data:
         raise RuntimeError('Must be called from worker process')
+    return _current_worker_data.get(key, default)
 
 
 def get_worker_app():
@@ -82,10 +81,9 @@ def get_worker_app():
     :raises: RuntimeError
 
     """
-    if _current_worker_app:
-        return _current_worker_app
-    else:
+    if not _current_worker_app:
         raise RuntimeError('Must be called from worker process')
+    return _current_worker_app
 
 
 class DiscardTask(Exception):
@@ -248,6 +246,26 @@ class _WorkerProcess(object):
             raise
 
 
+class _LocalProcess(object):
+
+    def __init__(self, func):
+        super(_LocalProcess, self).__init__()
+        self._func = func
+        self.queues = None
+        self.app = None
+        self.pid = None
+
+    def _run(self):
+        try:
+            return self._func()
+        except (SystemExit, KeyboardInterrupt):
+            pass
+        except Exception:
+            logger.exception('Unhandled exception in worker process')
+            traceback.print_exc()
+            raise
+
+
 class WorkerMaster(object):
     """Manages child processes that execute application workers. These workers
     may be listening on one or many queues.
@@ -312,7 +330,7 @@ class WorkerMaster(object):
     def add_worker(self, app, queues, num_processes=1, task_limit=10,
                    process_callback=None, task_callback=None,
                    return_callback=None, exclusive=False):
-        """Adds a new worker process to be managed by the :meth:`.run` method.
+        """Adds a new worker to be managed by the :meth:`.run` method.
 
         :param app: The application backend that knows how to enqueue and
                     execute tasks.
@@ -356,6 +374,27 @@ class WorkerMaster(object):
         for i in range(num_processes):
             worker = _WorkerProcess(app, queues, task_limit, process_callback,
                                     task_callback, return_callback, exclusive)
+            self.workers += [worker]
+
+    def add_local_worker(self, func, num_processes=1, args=None, kwargs=None):
+        """Adds a new worker to be managed by the :meth:`.run` method. A local
+        worker can be used to perform any additional processing that should be
+        managed and restarted.
+
+        :param func: The function to execute inside the worker.
+        :type func: collections.Callable
+        :param num_processes: The number of processes to maintain for this
+                              worker.
+        :type num_processes: int
+        :param args: Positional arguments to the function.
+        :type args: tuple
+        :param kwargs: Keyword arguments to the function.
+        :type kwargs: dict
+
+        """
+        func_partial = partial(func, *(args or ()), **(kwargs or {}))
+        for i in range(num_processes):
+            worker = _LocalProcess(func_partial)
             self.workers += [worker]
 
     def _check_workers(self):

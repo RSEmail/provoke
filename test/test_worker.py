@@ -17,8 +17,8 @@ except ImportError:
 
 from provoke import worker as worker_mod
 from provoke.amqp import AmqpConnection
-from provoke.worker import _WorkerProcess, WorkerMaster, \
-    get_worker_data, get_worker_app, DiscardTask
+from provoke.worker import _WorkerProcess, _LocalProcess, \
+    WorkerMaster, get_worker_data, get_worker_app, DiscardTask
 
 
 class JsonMatcher(object):
@@ -37,6 +37,7 @@ class TestWorkerProcess(unittest.TestCase):
 
     def setUp(self):
         worker_mod._current_worker_data = {}
+        worker_mod._current_worker_app = None
 
     @patch.object(AmqpConnection, '__enter__')
     @patch.object(AmqpConnection, '__exit__')
@@ -203,7 +204,26 @@ class TestWorkerProcess(unittest.TestCase):
         worker._consume.assert_called_with()
 
 
+class TestLocalProcess(unittest.TestCase):
+
+    @patch.object(traceback, 'print_exc')
+    def test_run(self, printexc_mock):
+        func1 = MagicMock(return_value='return1')
+        func2 = MagicMock(side_effect=ValueError)
+        func3 = MagicMock(side_effect=SystemExit)
+        self.assertEqual('return1', _LocalProcess(func1)._run())
+        self.assertRaises(ValueError, _LocalProcess(func2)._run)
+        self.assertEqual(None, _LocalProcess(func3)._run())
+        func1.assert_called_once_with()
+        func2.assert_called_once_with()
+        func3.assert_called_once_with()
+
+
 class TestWorkerMaster(unittest.TestCase):
+
+    def setUp(self):
+        worker_mod._current_worker_data = {}
+        worker_mod._current_worker_app = None
 
     def test_start_callback(self):
         cb = MagicMock(side_effect=Exception)
@@ -238,6 +258,17 @@ class TestWorkerMaster(unittest.TestCase):
         self.assertEqual('testapp', master.workers[2].app)
         self.assertEqual(['queue2'], master.workers[2].queues)
         self.assertFalse(master.workers[2].exclusive)
+
+    def test_add_local_worker(self):
+        master = WorkerMaster()
+        self.assertEqual([], master.workers)
+        func = MagicMock(return_value='retval')
+        master.add_local_worker(func, 2)
+        self.assertEqual(2, len(master.workers))
+        self.assert_(isinstance(master.workers[0], _LocalProcess))
+        self.assert_(isinstance(master.workers[1], _LocalProcess))
+        self.assertEqual('retval', master.workers[0]._func())
+        self.assertEqual('retval', master.workers[1]._func())
 
     @patch.object(os, 'waitpid')
     def test_check_workers(self, waitpid_mock):
