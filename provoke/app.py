@@ -42,8 +42,8 @@ producers and executors see the task system.
                 is ready.
       :rtype: :class:`AsyncResult`
 
-   .. method:: apply_async(args, kwargs=None, correlation_id=None,
-                           routing_key=None, send_result=False,
+   .. method:: apply_async(args, kwargs=None, correlation_id=None, \\
+                           routing_key=None, send_result=False, \\
                            result_queue=None)
 
       Triggers the asynchronous execution of a task by a separate worker
