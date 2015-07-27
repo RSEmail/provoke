@@ -1,6 +1,7 @@
 
 %{?el5: %define py_basever 26}
 %{?el5: %define __python /usr/bin/python2.6}
+%{?el5: %define _initddir %{_initrddir}}
 
 Name:           provoke
 Version:        0.0.0
