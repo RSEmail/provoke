@@ -40,6 +40,7 @@ Lightweight, asynchronous function execution in Python using AMQP.
 %{__python} setup.py install --skip-build -O1 --record=files.txt --single-version-externally-managed --root %{buildroot}
 
 %if 0%{?rhel} >= 7
+mkdir -p %{buildroot}/%{_unitdir}
 install -m 644 %{SOURCE1} %{buildroot}/%{_unitdir}/provoke@.service
 %else
 mkdir -p %{buildroot}/%{_initddir}
