@@ -121,21 +121,23 @@ class MySQLConnection(object):
     The connection is automatically closed when the context manager ends, but
     any cursors you created should be closed manually.
 
-    :param db_names: The pre-configured database names to create connections
-                     for. Upon context manager entry, one
-                     :class:`_MySQLContext` object will be returned for each
-                     entry in ``db_names``.
-    :type db_names: str
+    :param db_name: The pre-configured database names to create connections
+                    for. Upon context manager entry, a :class:`_MySQLContext`
+                    object will be returned for the given database.
+    :type db_name: str
 
     """
 
     _connection_params = {}
     _pools = None
 
-    def __init__(self, *db_names):
+    #: The default database name to use if no name is given to the constructor.
+    default_name = None
+
+    def __init__(self, db_name=None):
         super(MySQLConnection, self).__init__()
-        self.db_names = db_names
-        self.db_conns = [None]*len(db_names)
+        self.db_name = db_name or self.default_name
+        self.db_conn = None
 
     @classmethod
     def reset_connection_params(cls):
@@ -157,36 +159,29 @@ class MySQLConnection(object):
         cls._connection_params[db_name] = params
 
     @classmethod
-    def _get_pools(cls, db_names):
+    def _get_pool(cls, db_name):
         if not cls._pools:
             cls._pools = {}
-        for db_name in db_names:
-            if db_name not in cls._pools:
-                params = cls._connection_params.get(db_name, {})
-                cls._pools[db_name] = ConnectionPool(_MySQLContext,
-                                                     conn_kwargs=params)
-        return cls._pools
+        if db_name not in cls._pools:
+            params = cls._connection_params.get(db_name, {})
+            cls._pools[db_name] = ConnectionPool(_MySQLContext,
+                                                 conn_kwargs=params)
+        return cls._pools[db_name]
 
     def __enter__(self):
-        pools = self._get_pools(self.db_names)
-        for i, db_name in enumerate(self.db_names):
-            pool = pools[db_name]
-            self.db_conns[i] = pool.get()
-        if len(self.db_conns) > 1:
-            return self.db_conns
-        elif len(self.db_conns) == 1:
-            return self.db_conns[0]
+        pool = self._get_pool(self.db_name)
+        self.db_conn = conn = pool.get()
+        return conn
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        pools = self._get_pools(self.db_names)
+        pool = self._get_pool(self.db_name)
+        conn = self.db_conn
         try:
-            for i, db_name in enumerate(self.db_names):
-                self.db_conns[i].rollback()
-                if exc_type:
-                    self.db_conns[i].close()
-                else:
-                    pool = pools[db_name]
-                    pool.release(self.db_conns[i])
+            conn.rollback()
+            if exc_type:
+                conn.close()
+            else:
+                pool.release(conn)
         except Exception:
             if not exc_type:
                 raise
