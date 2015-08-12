@@ -26,6 +26,7 @@ Requires(preun): chkconfig, initscripts
 %endif
 
 Requires:       python%{?py_basever}, python%{?py_basever}-setuptools
+Requires:       python%{?py_basever}-amqp, python%{?py_basever}-six
 
 %description
 Lightweight, asynchronous function execution in Python using AMQP.
