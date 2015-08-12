@@ -254,6 +254,7 @@ class _LocalProcess(object):
         self.queues = None
         self.app = None
         self.pid = None
+        self.process_callback = None
 
     def _run(self):
         try:
