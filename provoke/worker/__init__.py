@@ -439,7 +439,6 @@ class WorkerMaster(object):
             _current_worker_data = self._worker_data.copy()
             _current_worker_app = worker.app
             _run_cb(self, 'process_callback')
-            _run_cb(self, 'start_callback')
             _run_cb(worker, 'start_callback')
             try:
                 worker._run()
