@@ -113,17 +113,61 @@ class RequeueTask(Exception):
     pass
 
 
-class _WorkerProcess(object):
+def _run_cb(obj, name, *args, **kwargs):
+    try:
+        callback = getattr(obj, name)
+    except AttributeError:
+        return
+    try:
+        callback(*args, **kwargs)
+    except (DiscardTask, AssertionError, SystemExit, KeyboardInterrupt):
+        raise
+    except Exception:
+        logger.exception('Unhandled exception in callback')
 
-    def __init__(self, app, queues, limit=None, process_callback=None,
-                 task_callback=None, return_callback=None, exclusive=False):
-        super(_WorkerProcess, self).__init__()
+
+class WorkerProcess(object):
+    """The default class for managing worker processes executed by the
+    :class:`WorkerMaster`. Override this class to implement callbacks and pass
+    the new class as the ``worker_class`` parameter to
+    :meth:`~WorkerMaster.add_worker`.
+
+    .. method:: start_callback()
+
+       Called within the child process when it is first created, before any
+       tasks are executed.
+
+    .. method:: exit_callback()
+
+       Called within the child process immediately before the process exits for
+       any reason. You can determine if the process died from an exception by
+       calling :func:`sys.exc_info`.
+
+    .. method:: task_callback(name, args, kwargs)
+
+       Called within the child process before executing each task.
+
+       :param str name: Name of the task to be executed.
+       :param list args: List of positional arguments for the task.
+       :param dict kwargs: Dictionary of keyword arguments for the task.
+
+    .. method:: return_callback(name, ret)
+
+       Called within the child process after executing a task, whether success
+       or failure.
+
+       :param str name: Name of the task that was executed.
+       :param ret: Return value of the task function. If this is ``None``,
+                   check :func:`sys.exc_info` to see if the task function
+                   raised an exception.
+
+    """
+
+    def __init__(self, app, queues, limit=None, exclusive=False):
+        super(WorkerProcess, self).__init__()
         self.app = app
         self.queues = queues
         self.limit = limit
-        self.process_callback = process_callback
-        self.task_callback = task_callback
-        self.return_callback = return_callback
         self.exclusive = exclusive
         self.active_connection = None
         self.pid = None
@@ -146,11 +190,11 @@ class _WorkerProcess(object):
         _current_worker_data['correlation_id'] = task_id
         _current_worker_data['redelivered'] = \
             msg.delivery_info.get('redelivered')
-        if self.task_callback:
-            try:
-                self.task_callback(task_name, task_args, task_kwargs)
-            except DiscardTask:
-                skip = True
+        try:
+            _run_cb(self, 'task_callback', task_name, task_args,
+                    task_kwargs)
+        except DiscardTask:
+            skip = True
         if not skip:
             try:
                 ret = call.apply(task_args, task_kwargs, task_id)
@@ -159,15 +203,13 @@ class _WorkerProcess(object):
                     body['exception'] = {'value': cPickle.dumps(exc),
                                          'traceback': traceback.format_exc()}
                     self._send_result(channel, task_id, reply_to, body)
-                if self.return_callback:
-                    self.return_callback(task_name, None)
+                _run_cb(self, 'return_callback', task_name, None)
                 raise
             else:
                 if reply_to:
                     body['return'] = ret
                     self._send_result(channel, task_id, reply_to, body)
-                if self.return_callback:
-                    self.return_callback(task_name, ret)
+                _run_cb(self, 'return_callback', task_name, ret)
 
     def _on_message(self, channel, msg):
         try:
@@ -254,7 +296,6 @@ class _LocalProcess(object):
         self.queues = None
         self.app = None
         self.pid = None
-        self.process_callback = None
 
     def _run(self):
         try:
@@ -271,21 +312,8 @@ class WorkerMaster(object):
     """Manages child processes that execute application workers. These workers
     may be listening on one or many queues.
 
-    :param start_callback: This function is called in the master process every
-                           time a new worker process is started. This callback
-                           is given three parameters, the
-                           :class:`~provoke.app.WorkerApplication`, a list of
-                           queues consumed by the new process, and the PID of
-                           the new process.
-    :type start_callback: collections.Callable
-    :param exit_callback: This function is called in the master process every
-                          time a worker process exits for any reason. It is
-                          passed in the same arguments as ``start_callback``
-                          plus the exit status integer.
-    :type exit_callback: collections.Callable
-    :param process_callback: This function is called with no arguments in new
-                             child processes before any tasks are executed.
-    :type process_callback: collections.Callable
+    Override this class to implement its callback methods.
+
     :param worker_data: Arbitrary data may be made available to workers with
                         this dictionary. Tasks running in worker processes may
                         use
@@ -293,44 +321,49 @@ class WorkerMaster(object):
                         access copies of this dictionary.
     :type worker_data: dict
 
+    .. method:: start_callback(app, queues, pid)
+
+       Called in the master process every time a new worker process is started.
+
+       :param app: The application the worker is running tasks for.
+       :type app: :class:`~provoke.app.WorkerApplication`
+       :param list queues: List of queues consumed by the new process.
+       :param int pid: The PID of the new process.
+
+    .. method:: exit_callback(app, queues, pid, status)
+
+       Called in the master process every time a worker process exits for any
+       reason.
+
+       :param app: The application the worker was running tasks for.
+       :type app: :class:`~provoke.app.WorkerApplication`
+       :param list queues: List of queues consumed by the dead process.
+       :param int pid: The former PID of the dead process.
+       :param int status: The exit status of the dead process.
+
+    .. method:: process_callback()
+
+       Called inside the new worker process, before it executes any tasks.
+
     """
 
-    def __init__(self, start_callback=None, exit_callback=None,
-                 process_callback=None, worker_data=None):
+    def __init__(self, worker_data=None):
         super(WorkerMaster, self).__init__()
-        self._start_callback = start_callback
-        self._exit_callback = exit_callback
-        self._process_callback = process_callback
         self._worker_data = worker_data or {}
         self.workers = []
 
-    def start_callback(self, worker):
+    def _start_callback(self, worker):
         logger.info('Process started: pid=%s, queues=%s',
                     worker.pid, repr(worker.queues))
-        if self._start_callback:
-            try:
-                self._start_callback(worker.queues, worker.pid)
-            except Exception:
-                pass
+        _run_cb(self, 'start_callback', worker.queues, worker.pid)
 
-    def exit_callback(self, worker, status):
+    def _exit_callback(self, worker, status):
         logger.info('Process exited: pid=%s, status=%s, queues=%s',
                     worker.pid, status, repr(worker.queues))
-        if self._exit_callback:
-            try:
-                self._exit_callback(worker.queues, worker.pid, status)
-            except Exception:
-                pass
-
-    def process_callbacks(self, worker):
-        if self._process_callback:
-            self._process_callback()
-        if worker.process_callback:
-            worker.process_callback()
+        _run_cb(self, 'exit_callback', worker.queues, worker.pid, status)
 
     def add_worker(self, app, queues, num_processes=1, task_limit=10,
-                   process_callback=None, task_callback=None,
-                   return_callback=None, exclusive=False):
+                   exclusive=False, worker_class=WorkerProcess):
         """Adds a new worker to be managed by the :meth:`.run` method.
 
         :param app: The application backend that knows how to enqueue and
@@ -346,35 +379,17 @@ class WorkerMaster(object):
                            before it exits and is replaced by a new worker
                            process.
         :type task_limit: int
-        :param process_callback: This function is called with no arguments in
-                                 new child processes before any tasks are
-                                 executed.
-        :type process_callback: collections.Callable
-        :param task_callback: This function is called inside the child process
-                              every time a task is ready for execution. This
-                              function is given four arguments, the
-                              :class:`~provoke.app.WorkerApplication`, the task
-                              name, and the positional and keyword arguments of
-                              the task.
-        :type task_callback: collections.Callable
-        :param return_callback: Like ``task_callback`` but called when the
-                                task is completed. This function is given three
-                                arguments, the
-                                :class:`~provoke.app.WorkerApplication`, the
-                                task name, and the return value. If an
-                                exception was raised during execution, it will
-                                be available in :func:`sys.exc_info`.
-        :type return_callback: collections.Callable
         :param exclusive: If True, the worker process will request
                           exclusive access to consume the queues. Additional
                           consume requests on the queue by other workers will
                           raise errors. Only makes sense to use one process!
         :type exclusive: bool
+        :param worker_class: Class to use when managing worker processes. See
+                             :class:`WorkerProcess` for details.
 
         """
         for i in range(num_processes):
-            worker = _WorkerProcess(app, queues, task_limit, process_callback,
-                                    task_callback, return_callback, exclusive)
+            worker = worker_class(app, queues, task_limit, exclusive)
             self.workers += [worker]
 
     def add_local_worker(self, func, num_processes=1, args=None, kwargs=None):
@@ -404,17 +419,18 @@ class WorkerMaster(object):
         except OSError as exc:
             if exc.errno == errno.ECHILD:
                 for worker in self.workers:
-                    self.exit_callback(worker, None)
+                    self._exit_callback(worker, None)
                     worker.pid = None
                 return False
             raise
         for worker in self.workers:
             exit_status = os.WEXITSTATUS(status)
             if pid == worker.pid:
-                self.exit_callback(worker, exit_status)
+                self._exit_callback(worker, exit_status)
                 worker.pid = None
                 return True
-        raise Exception('Received exit status for unknown process: '+pid)
+        msg = 'Received exit status for unknown process: {0!s}'.format(pid)
+        raise Exception(msg)
 
     def _start_worker(self, worker):
         pid = os.fork()
@@ -422,12 +438,15 @@ class WorkerMaster(object):
             global _current_worker_data, _current_worker_app
             _current_worker_data = self._worker_data.copy()
             _current_worker_app = worker.app
-            self.process_callbacks(worker)
+            _run_cb(self, 'process_callback')
+            _run_cb(worker, 'process_callback')
             try:
                 worker._run()
             except Exception:
+                _run_cb(worker, 'exit_callback')
                 os._exit(1)
-            finally:
+            else:
+                _run_cb(worker, 'exit_callback')
                 os._exit(0)
         else:
             return pid
@@ -436,7 +455,7 @@ class WorkerMaster(object):
         for worker in self.workers:
             if worker.pid is None:
                 worker.pid = self._start_worker(worker)
-                self.start_callback(worker)
+                self._start_callback(worker)
 
     def _stop_workers(self):
         for worker in self.workers:
@@ -467,7 +486,7 @@ class WorkerMaster(object):
                         status = None
                     else:
                         raise
-                self.exit_callback(worker, status)
+                self._exit_callback(worker, status)
                 worker.pid = None
 
     def run(self):
